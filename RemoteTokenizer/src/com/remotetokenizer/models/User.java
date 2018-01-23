@@ -13,6 +13,7 @@ import com.thoughtworks.xstream.annotations.XStreamAlias;
  */
 @XStreamAlias("user")
 public class User {
+
     private String name;
     private String password;
     private boolean canTokenize;
@@ -21,19 +22,28 @@ public class User {
     public User() {
     }
 
-    public User(String name, String password, boolean canTokenize, boolean canRetrieve) {
-        this.name = name;
-        this.password = password;
-        this.canTokenize = canTokenize;
-        this.canRetrieve = canRetrieve;
+    public User(String name, String password) {
+        this(name, password, false, false);
     }
-    
+
+    public User(String name, String password, boolean canTokenize, boolean canRetrieve) {
+        this();
+        this.setName(name);
+        this.setPassword(password);
+        this.setCanTokenize(canTokenize);
+        this.setCanRetrieve(canRetrieve);
+    }
+
     public String getName() {
         return name;
     }
 
     public void setName(String name) {
-        this.name = name;
+        if (name.length() < 5) {
+            throw new IllegalArgumentException("Passed invalid name!");
+        } else {
+            this.name = name;
+        }
     }
 
     public String getPassword() {
@@ -41,7 +51,11 @@ public class User {
     }
 
     public void setPassword(String password) {
-        this.password = password;
+        if (name.length() < 5) {
+            throw new IllegalArgumentException("Passed invalid password!");
+        } else {
+            this.password = password;
+        }
     }
 
     public boolean getCanTokenize() {
@@ -58,11 +72,11 @@ public class User {
 
     public void setCanRetrieve(boolean canRetrieve) {
         this.canRetrieve = canRetrieve;
-    }    
+    }
 
     @Override
     public String toString() {
         return String.format("Name: %s\nCan tokenize: %b\nCan retrieve: %b", this.getName(), this.getCanTokenize(), this.getCanRetrieve());
-    }    
-    
+    }
+
 }
