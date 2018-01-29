@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.remotetokenizer.services;
+package com.remotetokenizer.providers;
 
 import com.remotetokenizer.models.User;
 import com.thoughtworks.xstream.XStream;
@@ -25,7 +25,7 @@ import java.util.logging.Logger;
  *
  * @author Georgi Spasov
  */
-public class XMLStream implements IWriter, IReader {
+public class XMLStream {
 
     private final XStream xStream;
 
@@ -46,7 +46,7 @@ public class XMLStream implements IWriter, IReader {
         this.xStream.processAnnotations(User.class);
     }
 
-    @Override
+    
     public <T> void writeXML(T objectTowrite, String filePath, WriteMode writeMode) {
         boolean isAppend = false;
         if (writeMode == WriteMode.APPEND) {
@@ -59,7 +59,7 @@ public class XMLStream implements IWriter, IReader {
         }
     }
 
-    @Override
+    
     public <T> T readXML(String filePath) {
         T result = null;
         try (InputStream stream = new FileInputStream(filePath);) {

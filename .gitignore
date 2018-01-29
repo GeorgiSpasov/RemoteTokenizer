@@ -23,3 +23,15 @@ hs_err_pid*
 /RemoteTokenizer/nbproject/private/
 /RemoteTokenizer/build/
 /RemoteTokenizer/dist/
+/JavaApplication3/nbproject/private/
+/JavaApplication3/build/
+/JavaApplication3/dist/
+/TokenizerClientPanel/nbproject/private/
+/TokenizerClientPanel/build/
+/RMIClientPanel/nbproject/private/
+/RMIClientPanel/build/
+/RMIClientPanel/dist/
+/RemoteTokenizerServer/nbproject/private/
+/RemoteTokenizerClient/nbproject/private/
+/RemoteTokenizerServer/build/
+/RemoteTokenizerClient/build/

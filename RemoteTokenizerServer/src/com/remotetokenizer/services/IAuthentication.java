@@ -5,11 +5,14 @@
  */
 package com.remotetokenizer.services;
 
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
 /**
  *
  * @author Georgi Spasov
  */
-public interface IReader {
+public interface IAuthentication extends Remote {
 
-    public <T> T readXML(String filePath);
+    public boolean authenticate(String username, String password) throws RemoteException;
 }

@@ -3,11 +3,13 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.remotetokenizer.services;
+package com.remotetokenizer.core;
 
 import com.remotetokenizer.models.User;
-import static com.remotetokenizer.services.Tokenizer.checkCardId;
-import static com.remotetokenizer.services.Tokenizer.tokenize;
+import com.remotetokenizer.providers.WriteMode;
+import com.remotetokenizer.providers.XMLStream;
+import static com.remotetokenizer.providers.Tokenizer.checkCardId;
+import static com.remotetokenizer.providers.Tokenizer.tokenize;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;

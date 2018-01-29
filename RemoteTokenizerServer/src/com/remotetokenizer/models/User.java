@@ -6,13 +6,14 @@
 package com.remotetokenizer.models;
 
 import com.thoughtworks.xstream.annotations.XStreamAlias;
+import java.io.Serializable;
 
 /**
  *
  * @author Georgi Spasov
  */
 @XStreamAlias("user")
-public class User {
+public final class User implements Serializable{
 
     private String name;
     private String password;
