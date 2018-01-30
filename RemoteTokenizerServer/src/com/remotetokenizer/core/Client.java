@@ -5,8 +5,9 @@
  */
 package com.remotetokenizer.core;
 
-import com.remotetokenizer.services.IAuthentication;
-import java.awt.Color;
+import com.remotetokenizer.contracts.IAlert;
+import com.remotetokenizer.contracts.IAuthentication;
+import com.remotetokenizer.contracts.ITokenizer;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
@@ -14,18 +15,26 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
+import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.SwingConstants;
 
 /**
  *
  * @author Georgi Spasov
  */
-public class Client extends javax.swing.JFrame {
+public class Client extends javax.swing.JFrame implements IAlert {
+
+    private IAlert stub;
+
+    private UUID cookie;
 
     /**
      * Creates new form ClientPanelTest
      */
-    public Client() {
+    public Client() throws RemoteException {
         initComponents();
         pnlLogout.setVisible(false);
         pnlResult.setVisible(false);
@@ -33,39 +42,90 @@ public class Client extends javax.swing.JFrame {
         pnlRegister.setVisible(false);
         tabsMainPane.setEnabledAt(1, false);
         lblUsername.setHorizontalAlignment(SwingConstants.RIGHT);
+
+//        stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
     }
 
     // Client methods =============================================================================================
     public static String logedInUsername;
     public static boolean isLogedIn;
 
-    public static boolean Login(String username, String password) {
-        boolean status = false;
-        IAuthentication authentication = null;
-
+    public boolean login(String username, String password) {
+        UUID receivedCookie = null;
+        boolean success = false;
+        IAuthentication authentication;
         try {
             Registry registry = LocateRegistry.getRegistry(1099);
             // Getting Object using Remote Address
-            authentication = (IAuthentication) registry.lookup("Authentication");
+            authentication = (IAuthentication) registry.lookup(IAuthentication.LOOKUPNAME);
+            IAlert stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
             // Invoking the Method
-            status = authentication.authenticate(username, password);
-            if (status) {
-                logedInUsername = username; // Reuse for later requests ===========================================
-                System.out.println("You are an authorized user...");
-
+            this.stub = stub;
+            receivedCookie = authentication.authenticate(username, password, stub);
+            if (receivedCookie!=null) {
+                this.cookie = receivedCookie; // Reuse for later requests ===========================================
+                success = true;
                 // Do Something....
             } else {
-                System.out.println("Unauthorized Login Attempt");
+                UnicastRemoteObject.unexportObject(this, true);
             }
         } catch (RemoteException | NotBoundException e) {
-
             System.out.println(e.getMessage());
             e.printStackTrace();
         }
+
+        return success;
+    }
+
+    public boolean logout() {
+        boolean status = false;
+        // TODO: notify the server
+        try {
+            Registry registry = LocateRegistry.getRegistry(1099);
+            // Getting Object using Remote Address
+
+            //IAlert stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
+            if (status) {
+                logedInUsername = ""; // Reuse for later requests ===========================================
+                UnicastRemoteObject.unexportObject(this, true);
+
+                // Do Something....
+            } else {
+                UnicastRemoteObject.unexportObject(this, true);
+            }
+        } catch (RemoteException /*| NotBoundException*/ e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+        }
+
         return status;
     }
 
-    // Client methods =============================================================================================
+    public String tokenize() {
+        String bankId = txtInput.getText();
+        boolean success = false;
+        String token = "";
+        ITokenizer tokenizer;
+        try {
+            Registry registry = LocateRegistry.getRegistry(1099);
+            tokenizer = (ITokenizer) registry.lookup(ITokenizer.LOOKUPNAME);
+//            IAlert stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
+            token = tokenizer.createToken(bankId, cookie, this.stub);
+            if (!token.isEmpty()) {
+                success = true;
+//                UnicastRemoteObject.unexportObject(this, true);
+            } else {
+//                UnicastRemoteObject.unexportObject(this, true); //stub still in use!!!
+            }
+        } catch (RemoteException | NotBoundException e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+        }
+
+        return token;
+    }
+
+    // Client methods />=============================================================================================
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -416,14 +476,8 @@ public class Client extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void btnLoginActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnLoginActionPerformed
-        //TODO: visible only if success =====================================================
-
-        boolean isRegistered = Login(txtUsername.getText(), txtPassword.getText());
+        boolean isRegistered = login(txtUsername.getText(), txtPassword.getText());
         if (isRegistered) {
-            
-            lblLog.setForeground(Color.black);
-            lblLog.setText("Loged in as " +  logedInUsername); //TODO: use callback with info from server instead ========
-            
             pnlResult.setVisible(true);
             pnlLogin.setVisible(false);
             lblUsername.setText(txtUsername.getText());
@@ -435,15 +489,11 @@ public class Client extends javax.swing.JFrame {
             }
             tabsMainPane.setEnabledAt(1, true);
             tabsMainPane.setSelectedIndex(1);
-        }else{
-            lblLog.setForeground(Color.red);
-            lblLog.setText("Wrong username or password!");
         }
-
     }//GEN-LAST:event_btnLoginActionPerformed
 
     private void btnTokenizeActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnTokenizeActionPerformed
-        lblOutput.setText(txtInput.getText());
+        lblOutput.setText(this.tokenize());
         lblResultType.setText("Token: ");
         btnCopy.setVisible(true);
     }//GEN-LAST:event_btnTokenizeActionPerformed
@@ -461,10 +511,12 @@ public class Client extends javax.swing.JFrame {
 
     private void btnLogoutActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnLogoutActionPerformed
         // TODO add your handling code here:
+
+        logout();
         pnlLogout.setVisible(false);
         pnlLogin.setVisible(true);
         txtUsername.setText("Username");
-        txtPassword.setText("");
+        txtPassword.setText("   ");
         pnlResult.setVisible(false);
         txtInput.setText("");
         lblOutput.setText("");
@@ -512,7 +564,11 @@ public class Client extends javax.swing.JFrame {
         // Client methods =============================================================================================        
         /* Create and display the form */
         java.awt.EventQueue.invokeLater(() -> {
-            new Client().setVisible(true);
+            try {
+                new Client().setVisible(true);
+            } catch (RemoteException ex) {
+                Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+            }
         });
     }
 
@@ -545,4 +601,9 @@ public class Client extends javax.swing.JFrame {
     private javax.swing.JTextField txtRegisterUsername;
     private javax.swing.JTextField txtUsername;
     // End of variables declaration//GEN-END:variables
+
+    @Override
+    public void alert(String message) throws RemoteException {
+        lblLog.setText(message);
+    }
 }

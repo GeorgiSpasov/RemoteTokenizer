@@ -3,16 +3,19 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.remotetokenizer.services;
+package com.remotetokenizer.contracts;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+import java.util.UUID;
 
 /**
  *
  * @author Georgi Spasov
  */
-public interface IAuthentication extends Remote {
+public interface ITokenizer extends Remote {
 
-    public boolean authenticate(String username, String password) throws RemoteException;
+    public static final String LOOKUPNAME = "Tokenizer";
+
+    public String createToken(String bankId, UUID cookie, IAlert alertUser) throws RemoteException;
 }

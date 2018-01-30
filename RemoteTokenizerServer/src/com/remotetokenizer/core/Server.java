@@ -5,16 +5,24 @@
  */
 package com.remotetokenizer.core;
 
-import com.remotetokenizer.services.AuthenticationService;
-import com.remotetokenizer.services.IAuthentication;
+import com.remotetokenizer.models.User;
+import com.remotetokenizer.providers.Tokenizer;
+import com.remotetokenizer.providers.XMLStream;
+import com.remotetokenizer.contracts.IAlert;
+import com.remotetokenizer.contracts.IAuthentication;
+import com.remotetokenizer.contracts.ITokenizer;
 import java.awt.event.ItemEvent;
-import java.rmi.AlreadyBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -22,11 +30,15 @@ import java.util.HashMap;
  */
 public class Server extends javax.swing.JFrame {
 
+    private final Map<UUID, User> logedUsers;
+
     /**
      * Creates new form Server
      */
     public Server() {
         initComponents();
+
+        logedUsers = new ConcurrentHashMap<>();//TODO: Concurent==========================
         btnConnection.addItemListener((ItemEvent ev) -> {
             if (ev.getStateChange() == ItemEvent.SELECTED) {
                 btnConnection.setText("Stop");
@@ -36,34 +48,25 @@ public class Server extends javax.swing.JFrame {
         });
     }
 
-    // Server methods =====================================================================================================================
-    // Port Number you can change based on your system availability
-    private static final int PORT = 1099;
-
-    private static ArrayList<UnicastRemoteObject> services = new ArrayList<UnicastRemoteObject>();
-
-    public static void startServer(int portNumber) throws RemoteException {
-//        if (System.getSecurityManager() == null) {
-//            System.setSecurityManager(new SecurityManager());
-//        }
-        try {            
-            // Creating RMI Registry with Port
-            Registry registry = LocateRegistry.createRegistry(PORT);
-            String serviceName = "Authentication";
-                        
-            // Defining Object
-            IAuthentication authentication = new AuthenticationService();                
-            // Binding the Object
-            registry.rebind(serviceName, authentication);
-
-            System.out.printf("Authentication Service running at %d port...",PORT);
+    // Server methods ==========================================================
+    public void startServer(int portNumber) throws RemoteException {
+        try {
+            Registry registry = LocateRegistry.createRegistry(portNumber);
+            IAuthentication authentication = new AuthenticationService();
+            registry.rebind(IAuthentication.LOOKUPNAME, authentication);
+            ITokenizer tokenizer = new TokenizerService();
+            registry.rebind(ITokenizer.LOOKUPNAME, tokenizer);
+            this.txtServerLog
+                    .append((String.format("%s Service running at %d port...\n", IAuthentication.LOOKUPNAME, portNumber)));
+            this.txtServerLog
+                    .append((String.format("%s Service running at %d port...", ITokenizer.LOOKUPNAME, portNumber)));
         } catch (RemoteException e) {
             System.out.println(e.getMessage());
             e.printStackTrace();
         }
     }
 
-    // Server methods =====================================================================================================================
+    // Server methods ==========================================================
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -98,6 +101,11 @@ public class Server extends javax.swing.JFrame {
         setTitle("Remote Tokenizer Server");
 
         btnConnection.setText("Run");
+        btnConnection.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnConnectionActionPerformed(evt);
+            }
+        });
 
         lblStatus.setText("Status");
 
@@ -251,6 +259,15 @@ public class Server extends javax.swing.JFrame {
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
+    private void btnConnectionActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnConnectionActionPerformed
+        try {
+            // TODO add your handling code here:
+            startServer(1099);
+        } catch (RemoteException ex) {
+            Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }//GEN-LAST:event_btnConnectionActionPerformed
+
     /**
      * @param args the command line arguments
      */
@@ -278,10 +295,8 @@ public class Server extends javax.swing.JFrame {
         }
         //</editor-fold>
 
-        // Server methods =====================================================================================================================
-        startServer(00000);
-
-        // Server methods =====================================================================================================================  
+        // Server methods ======================================================
+        // Server methods ======================================================  
         /* Create and display the form */
         java.awt.EventQueue.invokeLater(() -> {
             new Server().setVisible(true);
@@ -311,4 +326,55 @@ public class Server extends javax.swing.JFrame {
     private javax.swing.JTextArea txtUsersOutput;
     // End of variables declaration//GEN-END:variables
 
+    class AuthenticationService extends UnicastRemoteObject implements IAuthentication {
+
+        public AuthenticationService() throws RemoteException {
+        }
+
+        @Override
+        public UUID authenticate(String username, String password, IAlert alertUser) throws RemoteException {
+            XMLStream stream = new XMLStream();
+            User logedUser;
+            UUID sentCookie = null;
+            List<User> usersFromXML = stream.<ArrayList<User>>readXML("users.xml");
+            logedUser = usersFromXML
+                    .stream()
+                    .filter(u -> (u.getName() == null ? username == null : u.getName().equals(username))
+                    && (u.getPassword() == null ? password == null : u.getPassword().equals(password)))
+                    .findFirst().orElse(null);
+            if (logedUser != null) {
+                sentCookie = UUID.randomUUID();
+                logedUsers.put(sentCookie, logedUser);
+                alertUser.alert("Login Success");
+            } else {
+                alertUser.alert("Login Failed");
+            }
+            return sentCookie;
+        }
+    }
+
+    class TokenizerService extends UnicastRemoteObject implements ITokenizer {
+
+        public TokenizerService() throws RemoteException {
+        }
+
+        @Override
+        public String createToken(String bankId, UUID cookie, IAlert alertUser) throws RemoteException {
+            String result = "";
+            boolean canTokenize = true == logedUsers.get(cookie).getCanTokenize();
+            if (canTokenize) {
+                Tokenizer tokenizer = new Tokenizer();
+                boolean cardIdCheck = tokenizer.checkCardId(bankId); //========================
+                if (cardIdCheck) {
+                    result = tokenizer.tokenize(bankId);
+                    alertUser.alert("CardId tokenized.");
+                } else {
+                    alertUser.alert("Wrong card id number!");
+                }
+            } else {
+                alertUser.alert("Unauthorized to tokenize!");
+            }
+            return result;
+        }
+    }
 }

@@ -6,15 +6,15 @@
 package com.remotetokenizer.core;
 
 import com.remotetokenizer.models.User;
+import com.remotetokenizer.providers.Tokenizer;
 import com.remotetokenizer.providers.WriteMode;
 import com.remotetokenizer.providers.XMLStream;
-import static com.remotetokenizer.providers.Tokenizer.checkCardId;
-import static com.remotetokenizer.providers.Tokenizer.tokenize;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 /**
@@ -25,13 +25,19 @@ public class Test {
 
     public static void main(String[] args) {
 
+        UUID a = UUID.randomUUID();
+        System.out.println(a);
+        
+        
         // Tokenizer tests ==============================================================================
+        Tokenizer tokenizer = new Tokenizer();
+        
         String cardId = "4563960122019991";
-        System.out.println(checkCardId(cardId));
+        System.out.println(tokenizer.checkCardId(cardId));
 
         // Token, CardId
         Map<String, String> xmlTokens = new HashMap<>();
-        String token = tokenize(cardId);
+        String token = tokenizer.tokenize(cardId);
 
         int tokenNumSum = Stream
                 .of(token.split(""))
@@ -45,7 +51,7 @@ public class Test {
 
         // Check for duplicates!!!
         while (xmlTokens.containsKey(token)) {
-            token = tokenize(cardId);
+            token = tokenizer.tokenize(cardId);
         }
         xmlTokens.put(token, cardId);
         String retrievedId = xmlTokens.get(token);

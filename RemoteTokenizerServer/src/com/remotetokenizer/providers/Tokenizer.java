@@ -17,7 +17,7 @@ import java.util.stream.Stream;
  */
 public class Tokenizer {
 
-    public static boolean checkCardId(String cardId) {
+    public boolean checkCardId(String cardId) {
         int cardIdDigits[] = Stream
                 .of(cardId.split(""))
                 .mapToInt(n -> Integer.parseInt(n))
@@ -34,7 +34,7 @@ public class Tokenizer {
         return sum % 10 == 0;
     }
 
-    public static String tokenize(String cardId) {
+    public String tokenize(String cardId) {
         Random rnd = new Random();
         int tokenLength = cardId.length();
         int firstDigits[] = {3, 4, 5, 6};
