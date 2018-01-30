@@ -10,13 +10,17 @@ import com.remotetokenizer.providers.Tokenizer;
 import com.remotetokenizer.providers.XMLStream;
 import com.remotetokenizer.contracts.IAlert;
 import com.remotetokenizer.contracts.IAuthentication;
+import com.remotetokenizer.contracts.IRegister;
+import com.remotetokenizer.contracts.IRetriever;
 import com.remotetokenizer.contracts.ITokenizer;
+import com.remotetokenizer.providers.WriteMode;
 import java.awt.event.ItemEvent;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -56,10 +60,18 @@ public class Server extends javax.swing.JFrame {
             registry.rebind(IAuthentication.LOOKUPNAME, authentication);
             ITokenizer tokenizer = new TokenizerService();
             registry.rebind(ITokenizer.LOOKUPNAME, tokenizer);
+            IRetriever retriever = new RetrieverService();
+            registry.rebind(IRetriever.LOOKUPNAME, retriever);
+            IRegister registrar = new RegisterUserService();
+            registry.rebind(IRegister.LOOKUPNAME, registrar);
             this.txtServerLog
                     .append((String.format("%s Service running at %d port...\n", IAuthentication.LOOKUPNAME, portNumber)));
             this.txtServerLog
-                    .append((String.format("%s Service running at %d port...", ITokenizer.LOOKUPNAME, portNumber)));
+                    .append((String.format("%s Service running at %d port...\n", ITokenizer.LOOKUPNAME, portNumber)));
+            this.txtServerLog
+                    .append((String.format("%s Service running at %d port...\n", IRetriever.LOOKUPNAME, portNumber)));
+            this.txtServerLog
+                    .append((String.format("%s Service running at %d port...", IRegister.LOOKUPNAME, portNumber)));
         } catch (RemoteException e) {
             System.out.println(e.getMessage());
             e.printStackTrace();
@@ -351,6 +363,13 @@ public class Server extends javax.swing.JFrame {
             }
             return sentCookie;
         }
+
+        @Override
+        public void logOut(UUID cookie, IAlert alertUser) throws RemoteException {
+            logedUsers.remove(cookie);
+            alertUser.alert("Logged out");
+        }
+
     }
 
     class TokenizerService extends UnicastRemoteObject implements ITokenizer {
@@ -359,14 +378,18 @@ public class Server extends javax.swing.JFrame {
         }
 
         @Override
-        public String createToken(String bankId, UUID cookie, IAlert alertUser) throws RemoteException {
+        public String createToken(String cardId, UUID cookie, IAlert alertUser) throws RemoteException {
             String result = "";
             boolean canTokenize = true == logedUsers.get(cookie).getCanTokenize();
             if (canTokenize) {
                 Tokenizer tokenizer = new Tokenizer();
-                boolean cardIdCheck = tokenizer.checkCardId(bankId); //========================
+                boolean cardIdCheck = tokenizer.checkCardId(cardId); //========================
                 if (cardIdCheck) {
-                    result = tokenizer.tokenize(bankId);
+                    result = tokenizer.tokenize(cardId);
+                    XMLStream stream = new XMLStream();
+                    Map<String, String> tokensFromXML = stream.<HashMap<String, String>>readXML("tokens.xml");
+                    tokensFromXML.put(result, cardId);
+                    stream.<Map<String, String>>writeXML(tokensFromXML, "tokens.xml", WriteMode.UPDATE);
                     alertUser.alert("CardId tokenized.");
                 } else {
                     alertUser.alert("Wrong card id number!");
@@ -375,6 +398,47 @@ public class Server extends javax.swing.JFrame {
                 alertUser.alert("Unauthorized to tokenize!");
             }
             return result;
+        }
+    }
+
+    class RetrieverService extends UnicastRemoteObject implements IRetriever {
+
+        public RetrieverService() throws RemoteException {
+        }
+
+        @Override
+        public String getCardId(String token, UUID cookie, IAlert alertUser) throws RemoteException {
+            String result = "";
+            boolean canRetrieve = true == logedUsers.get(cookie).getCanRetrieve();
+            if (canRetrieve) {
+                XMLStream stream = new XMLStream();
+                result = stream.<HashMap<String, String>>readXML("tokens.xml")
+                        .get(token);
+                if (!result.isEmpty()) {
+                    alertUser.alert("Card Id retrieved.");
+                } else {
+                    alertUser.alert("Card Id not tokenized!");
+                }
+            } else {
+                alertUser.alert("Unauthorized to retrieve!");
+            }
+            return result;
+        }
+    }
+
+    class RegisterUserService extends UnicastRemoteObject implements IRegister {
+
+        public RegisterUserService() throws RemoteException {
+        }
+
+        @Override
+        public void register(String name, String password, boolean canTokenize, boolean canRetrieve, UUID cookie, IAlert alertUser) throws RemoteException {
+            XMLStream stream = new XMLStream();
+            List<User> usersFromXML = stream.<ArrayList<User>>readXML("users.xml");
+            User newUser = new User(name, password, canTokenize, canRetrieve);
+            usersFromXML.add(newUser);
+            stream.<List<User>>writeXML(usersFromXML, "users.xml", WriteMode.UPDATE);
+            alertUser.alert("User registered.");
         }
     }
 }

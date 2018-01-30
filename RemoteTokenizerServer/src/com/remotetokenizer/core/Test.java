@@ -24,10 +24,6 @@ import java.util.stream.Stream;
 public class Test {
 
     public static void main(String[] args) {
-
-        UUID a = UUID.randomUUID();
-        System.out.println(a);
-        
         
         // Tokenizer tests ==============================================================================
         Tokenizer tokenizer = new Tokenizer();

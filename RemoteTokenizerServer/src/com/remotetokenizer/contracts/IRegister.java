@@ -13,13 +13,9 @@ import java.util.UUID;
  *
  * @author Georgi Spasov
  */
-public interface IAuthentication extends Remote {
+public interface IRegister extends Remote {
 
-    public static final String LOOKUPNAME = "Authentication";
+    public static final String LOOKUPNAME = "RegisterUser";
 
-    public UUID authenticate(String username, String password, IAlert alertUser)
-            throws RemoteException;
-
-    public void logOut(UUID cookie, IAlert alertUser)
-            throws RemoteException;
+    public void register(String name, String Password, boolean canTokenize, boolean canRetrieve, UUID cookie, IAlert alertUser) throws RemoteException;
 }

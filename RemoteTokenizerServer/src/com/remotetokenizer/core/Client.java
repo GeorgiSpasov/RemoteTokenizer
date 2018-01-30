@@ -7,6 +7,8 @@ package com.remotetokenizer.core;
 
 import com.remotetokenizer.contracts.IAlert;
 import com.remotetokenizer.contracts.IAuthentication;
+import com.remotetokenizer.contracts.IRegister;
+import com.remotetokenizer.contracts.IRetriever;
 import com.remotetokenizer.contracts.ITokenizer;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
@@ -30,6 +32,8 @@ public class Client extends javax.swing.JFrame implements IAlert {
     private IAlert stub;
 
     private UUID cookie;
+
+    private Registry registry;
 
     /**
      * Creates new form ClientPanelTest
@@ -55,14 +59,14 @@ public class Client extends javax.swing.JFrame implements IAlert {
         boolean success = false;
         IAuthentication authentication;
         try {
-            Registry registry = LocateRegistry.getRegistry(1099);
+            this.registry = LocateRegistry.getRegistry(1099);
             // Getting Object using Remote Address
             authentication = (IAuthentication) registry.lookup(IAuthentication.LOOKUPNAME);
             IAlert stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
             // Invoking the Method
             this.stub = stub;
             receivedCookie = authentication.authenticate(username, password, stub);
-            if (receivedCookie!=null) {
+            if (receivedCookie != null) {
                 this.cookie = receivedCookie; // Reuse for later requests ===========================================
                 success = true;
                 // Do Something....
@@ -77,22 +81,19 @@ public class Client extends javax.swing.JFrame implements IAlert {
         return success;
     }
 
-    public boolean logout() {
+    public boolean logout() throws NotBoundException {
         boolean status = false;
-        // TODO: notify the server
+        IAuthentication authentication;
         try {
-            Registry registry = LocateRegistry.getRegistry(1099);
+            this.registry = LocateRegistry.getRegistry(1099);
             // Getting Object using Remote Address
-
-            //IAlert stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
-            if (status) {
-                logedInUsername = ""; // Reuse for later requests ===========================================
-                UnicastRemoteObject.unexportObject(this, true);
-
-                // Do Something....
-            } else {
-                UnicastRemoteObject.unexportObject(this, true);
-            }
+            authentication = (IAuthentication) registry.lookup(IAuthentication.LOOKUPNAME);
+//            IAlert stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
+            // Invoking the Method
+//            this.stub = stub;
+            authentication.logOut(this.cookie, stub);
+            this.cookie = null;
+            UnicastRemoteObject.unexportObject(this, true);
         } catch (RemoteException /*| NotBoundException*/ e) {
             System.out.println(e.getMessage());
             e.printStackTrace();
@@ -123,6 +124,49 @@ public class Client extends javax.swing.JFrame implements IAlert {
         }
 
         return token;
+    }
+
+    public String retrieve() {
+        String token = txtInput.getText();
+        boolean success = false;
+        String retrievedCardId = "";
+        IRetriever retriever;
+        try {
+            Registry registry = LocateRegistry.getRegistry(1099);
+            retriever = (IRetriever) registry.lookup(IRetriever.LOOKUPNAME);
+//            IAlert stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
+            retrievedCardId = retriever.getCardId(token, cookie, this.stub);
+            if (!retrievedCardId.isEmpty()) {
+                success = true;
+//                UnicastRemoteObject.unexportObject(this, true);
+            } else {
+//                UnicastRemoteObject.unexportObject(this, true); //stub still in use!!!
+            }
+        } catch (RemoteException | NotBoundException e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+        }
+
+        return retrievedCardId;
+    }
+
+    public void register() {
+        String bankId = txtInput.getText();
+        boolean success = false;
+        String name = txtRegisterUsername.getText();
+        String pass = txtRegisterPassword.getText();
+        boolean canTokenize = chkCanTokenize.isSelected();
+        boolean canRetrieve = chkCanRetrieve.isSelected();
+        IRegister registrar;
+
+        try {
+            Registry registry = LocateRegistry.getRegistry(1099);
+            registrar = (IRegister) registry.lookup(IRegister.LOOKUPNAME);
+            registrar.register(name, pass, canTokenize, canRetrieve, cookie, stub);
+        } catch (RemoteException | NotBoundException e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     // Client methods />=============================================================================================
@@ -507,12 +551,17 @@ public class Client extends javax.swing.JFrame implements IAlert {
 
     private void btnRetrieveActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnRetrieveActionPerformed
         // TODO add your handling code here:
+        lblOutput.setText(this.retrieve());
+        lblResultType.setText("Card Id: ");
+        btnCopy.setVisible(true);
     }//GEN-LAST:event_btnRetrieveActionPerformed
 
     private void btnLogoutActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnLogoutActionPerformed
-        // TODO add your handling code here:
-
-        logout();
+        try {
+            logout();
+        } catch (NotBoundException ex) {
+            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+        }
         pnlLogout.setVisible(false);
         pnlLogin.setVisible(true);
         txtUsername.setText("Username");
@@ -530,6 +579,7 @@ public class Client extends javax.swing.JFrame implements IAlert {
 
     private void btnRegisterUserActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnRegisterUserActionPerformed
         // TODO add your handling code here:
+        this.register();
     }//GEN-LAST:event_btnRegisterUserActionPerformed
 
     /**
