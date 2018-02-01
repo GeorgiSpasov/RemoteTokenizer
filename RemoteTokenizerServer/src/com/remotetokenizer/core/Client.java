@@ -10,6 +10,7 @@ import com.remotetokenizer.contracts.IAuthentication;
 import com.remotetokenizer.contracts.IRegister;
 import com.remotetokenizer.contracts.IRetriever;
 import com.remotetokenizer.contracts.ITokenizer;
+import java.awt.Color;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
@@ -21,6 +22,7 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 
 /**
@@ -29,10 +31,17 @@ import javax.swing.SwingConstants;
  */
 public class Client extends javax.swing.JFrame implements IAlert {
 
+    private static final String EMAIL_PATTERN
+            = "^[_A-Za-z0-9-\\+]+(\\.[_A-Za-z0-9-]+)*@"
+            + "[A-Za-z0-9-]+(\\.[A-Za-z0-9]+)*(\\.[A-Za-z]{1,})$";
+    private static final String PASSOWRD_PATTERN
+            = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])"
+            + "(?=.*[@#$%^&+=])(?=\\S+$).{8,}$";
+    private static final String CARD_INPUT_PATTERN
+            = "([0-9]{16})$";
+    private IAuthentication authentication;
     private IAlert stub;
-
     private UUID cookie;
-
     private Registry registry;
 
     /**
@@ -46,57 +55,40 @@ public class Client extends javax.swing.JFrame implements IAlert {
         pnlRegister.setVisible(false);
         tabsMainPane.setEnabledAt(1, false);
         lblUsername.setHorizontalAlignment(SwingConstants.RIGHT);
-
-//        stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
     }
-
-    // Client methods =============================================================================================
-    public static String logedInUsername;
-    public static boolean isLogedIn;
 
     public boolean login(String username, String password) {
         UUID receivedCookie = null;
-        boolean success = false;
-        IAuthentication authentication;
+        boolean isRegistered = false;
         try {
             this.registry = LocateRegistry.getRegistry(1099);
             // Getting Object using Remote Address
-            authentication = (IAuthentication) registry.lookup(IAuthentication.LOOKUPNAME);
-            IAlert stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
+            this.authentication = (IAuthentication) this.registry.lookup(IAuthentication.LOOKUPNAME);
+            // Assign IAlert stub for the session
+            this.stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
             // Invoking the Method
-            this.stub = stub;
-            receivedCookie = authentication.authenticate(username, password, stub);
+            receivedCookie = authentication.authenticate(username, password, this.stub);
             if (receivedCookie != null) {
-                this.cookie = receivedCookie; // Reuse for later requests ===========================================
-                success = true;
-                // Do Something....
+                this.cookie = receivedCookie;
+                isRegistered = true;
             } else {
                 UnicastRemoteObject.unexportObject(this, true);
             }
         } catch (RemoteException | NotBoundException e) {
-            System.out.println(e.getMessage());
-            e.printStackTrace();
+            lblLog.setText("Not connected!");
         }
 
-        return success;
+        return isRegistered;
     }
 
     public boolean logout() throws NotBoundException {
         boolean status = false;
-        IAuthentication authentication;
         try {
-            this.registry = LocateRegistry.getRegistry(1099);
-            // Getting Object using Remote Address
-            authentication = (IAuthentication) registry.lookup(IAuthentication.LOOKUPNAME);
-//            IAlert stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
-            // Invoking the Method
-//            this.stub = stub;
-            authentication.logOut(this.cookie, stub);
+            this.authentication.logOut(this.cookie, stub);
             this.cookie = null;
             UnicastRemoteObject.unexportObject(this, true);
-        } catch (RemoteException /*| NotBoundException*/ e) {
-            System.out.println(e.getMessage());
-            e.printStackTrace();
+        } catch (RemoteException e) {
+            lblLog.setText("Connection lost!");
         }
 
         return status;
@@ -104,23 +96,13 @@ public class Client extends javax.swing.JFrame implements IAlert {
 
     public String tokenize() {
         String bankId = txtInput.getText();
-        boolean success = false;
         String token = "";
         ITokenizer tokenizer;
         try {
-            Registry registry = LocateRegistry.getRegistry(1099);
-            tokenizer = (ITokenizer) registry.lookup(ITokenizer.LOOKUPNAME);
-//            IAlert stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
+            tokenizer = (ITokenizer) this.registry.lookup(ITokenizer.LOOKUPNAME);
             token = tokenizer.createToken(bankId, cookie, this.stub);
-            if (!token.isEmpty()) {
-                success = true;
-//                UnicastRemoteObject.unexportObject(this, true);
-            } else {
-//                UnicastRemoteObject.unexportObject(this, true); //stub still in use!!!
-            }
         } catch (RemoteException | NotBoundException e) {
-            System.out.println(e.getMessage());
-            e.printStackTrace();
+            lblLog.setText("Connection lost!");
         }
 
         return token;
@@ -128,20 +110,11 @@ public class Client extends javax.swing.JFrame implements IAlert {
 
     public String retrieve() {
         String token = txtInput.getText();
-        boolean success = false;
         String retrievedCardId = "";
         IRetriever retriever;
         try {
-            Registry registry = LocateRegistry.getRegistry(1099);
             retriever = (IRetriever) registry.lookup(IRetriever.LOOKUPNAME);
-//            IAlert stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
-            retrievedCardId = retriever.getCardId(token, cookie, this.stub);
-            if (!retrievedCardId.isEmpty()) {
-                success = true;
-//                UnicastRemoteObject.unexportObject(this, true);
-            } else {
-//                UnicastRemoteObject.unexportObject(this, true); //stub still in use!!!
-            }
+            retrievedCardId = retriever.getCardId(token, this.cookie, this.stub);
         } catch (RemoteException | NotBoundException e) {
             System.out.println(e.getMessage());
             e.printStackTrace();
@@ -151,25 +124,25 @@ public class Client extends javax.swing.JFrame implements IAlert {
     }
 
     public void register() {
-        String bankId = txtInput.getText();
-        boolean success = false;
         String name = txtRegisterUsername.getText();
         String pass = txtRegisterPassword.getText();
         boolean canTokenize = chkCanTokenize.isSelected();
         boolean canRetrieve = chkCanRetrieve.isSelected();
         IRegister registrar;
-
         try {
-            Registry registry = LocateRegistry.getRegistry(1099);
-            registrar = (IRegister) registry.lookup(IRegister.LOOKUPNAME);
-            registrar.register(name, pass, canTokenize, canRetrieve, cookie, stub);
+            registrar = (IRegister) this.registry.lookup(IRegister.LOOKUPNAME);
+            registrar.register(name, pass, canTokenize, canRetrieve, this.cookie, this.stub);
         } catch (RemoteException | NotBoundException e) {
-            System.out.println(e.getMessage());
-            e.printStackTrace();
+            this.lblLog.setText("Connection lost!");
         }
     }
 
-    // Client methods />=============================================================================================
+    @Override
+    public void alert(String message) throws RemoteException {
+        lblLog.setForeground(Color.BLACK);
+        lblLog.setText(message);
+    }
+
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -268,13 +241,14 @@ public class Client extends javax.swing.JFrame implements IAlert {
         pnlResult.setBorder(javax.swing.BorderFactory.createEtchedBorder());
 
         btnTokenize.setText("Tokenize");
+        btnTokenize.setEnabled(false);
         btnTokenize.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnTokenizeActionPerformed(evt);
             }
         });
 
-        lblOutput.setText("Output");
+        lblOutput.setText(" ");
 
         btnCopy.setText("Copy");
         btnCopy.addActionListener(new java.awt.event.ActionListener() {
@@ -284,15 +258,26 @@ public class Client extends javax.swing.JFrame implements IAlert {
         });
 
         txtInput.setToolTipText("Input");
+        txtInput.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent evt) {
+                txtInputFocusGained(evt);
+            }
+        });
+        txtInput.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyTyped(java.awt.event.KeyEvent evt) {
+                txtInputKeyTyped(evt);
+            }
+        });
 
         btnRetrieve.setText("Retrieve");
+        btnRetrieve.setEnabled(false);
         btnRetrieve.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnRetrieveActionPerformed(evt);
             }
         });
 
-        lblResultType.setText("Resul Type");
+        lblResultType.setText(" ");
 
         pnlResult.setLayer(btnTokenize, javax.swing.JLayeredPane.DEFAULT_LAYER);
         pnlResult.setLayer(lblOutput, javax.swing.JLayeredPane.DEFAULT_LAYER);
@@ -309,17 +294,16 @@ public class Client extends javax.swing.JFrame implements IAlert {
                 .addContainerGap()
                 .addGroup(pnlResultLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(pnlResultLayout.createSequentialGroup()
-                        .addComponent(lblResultType, javax.swing.GroupLayout.PREFERRED_SIZE, 77, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(lblOutput, javax.swing.GroupLayout.PREFERRED_SIZE, 183, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addGroup(pnlResultLayout.createSequentialGroup()
-                        .addComponent(txtInput, javax.swing.GroupLayout.PREFERRED_SIZE, 189, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(lblResultType, javax.swing.GroupLayout.PREFERRED_SIZE, 59, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(btnTokenize)))
+                        .addComponent(lblOutput, javax.swing.GroupLayout.PREFERRED_SIZE, 115, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(txtInput, javax.swing.GroupLayout.PREFERRED_SIZE, 189, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(pnlResultLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(btnRetrieve)
-                    .addComponent(btnCopy, javax.swing.GroupLayout.PREFERRED_SIZE, 77, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGroup(pnlResultLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addComponent(btnTokenize, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(btnCopy, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(btnRetrieve)
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         pnlResultLayout.setVerticalGroup(
@@ -364,16 +348,39 @@ public class Client extends javax.swing.JFrame implements IAlert {
 
         pnlLogin.setBorder(javax.swing.BorderFactory.createEtchedBorder());
 
-        txtUsername.setText("Username");
+        txtUsername.setText("username");
+        txtUsername.setToolTipText("Username");
+        txtUsername.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent evt) {
+                txtBoxFocusGained(evt);
+            }
+        });
+        txtUsername.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyTyped(java.awt.event.KeyEvent evt) {
+                txtUsernameKeyTyped(evt);
+            }
+        });
 
         btnLogin.setText("Login");
+        btnLogin.setEnabled(false);
         btnLogin.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnLoginActionPerformed(evt);
             }
         });
 
-        txtPassword.setText("jPasswordField1");
+        txtPassword.setText("***");
+        txtPassword.setToolTipText("Password");
+        txtPassword.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent evt) {
+                txtPasswordFocusGained(evt);
+            }
+        });
+        txtPassword.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyTyped(java.awt.event.KeyEvent evt) {
+                txtPasswordKeyTyped(evt);
+            }
+        });
 
         pnlLogin.setLayer(txtUsername, javax.swing.JLayeredPane.DEFAULT_LAYER);
         pnlLogin.setLayer(btnLogin, javax.swing.JLayeredPane.DEFAULT_LAYER);
@@ -407,15 +414,38 @@ public class Client extends javax.swing.JFrame implements IAlert {
         chkCanTokenize.setText("Tokenize");
 
         btnRegisterUser.setText("Register");
+        btnRegisterUser.setEnabled(false);
         btnRegisterUser.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnRegisterUserActionPerformed(evt);
             }
         });
 
-        txtRegisterUsername.setText("Username");
+        txtRegisterUsername.setText("username");
+        txtRegisterUsername.setToolTipText("Username");
+        txtRegisterUsername.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent evt) {
+                txtRegisterUsernameFocusGained(evt);
+            }
+        });
+        txtRegisterUsername.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyTyped(java.awt.event.KeyEvent evt) {
+                txtRegisterUsernameKeyTyped(evt);
+            }
+        });
 
-        txtRegisterPassword.setText("jPasswordField1");
+        txtRegisterPassword.setText("***");
+        txtRegisterPassword.setToolTipText("Password");
+        txtRegisterPassword.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent evt) {
+                txtRegisterPasswordFocusGained(evt);
+            }
+        });
+        txtRegisterPassword.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyTyped(java.awt.event.KeyEvent evt) {
+                txtRegisterPasswordKeyTyped(evt);
+            }
+        });
 
         pnlRegister.setLayer(chkCanRetrieve, javax.swing.JLayeredPane.DEFAULT_LAYER);
         pnlRegister.setLayer(chkCanTokenize, javax.swing.JLayeredPane.DEFAULT_LAYER);
@@ -484,7 +514,7 @@ public class Client extends javax.swing.JFrame implements IAlert {
 
         tabsMainPane.addTab("Login/Register", pnlUser);
 
-        lblLog.setText("Log");
+        lblLog.setText(" ");
 
         javax.swing.GroupLayout pnlClientGUILayout = new javax.swing.GroupLayout(pnlClientGUI);
         pnlClientGUI.setLayout(pnlClientGUILayout);
@@ -493,16 +523,16 @@ public class Client extends javax.swing.JFrame implements IAlert {
             .addComponent(tabsMainPane)
             .addGroup(pnlClientGUILayout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(lblLog, javax.swing.GroupLayout.PREFERRED_SIZE, 350, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addComponent(lblLog, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addContainerGap())
         );
         pnlClientGUILayout.setVerticalGroup(
             pnlClientGUILayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(pnlClientGUILayout.createSequentialGroup()
                 .addComponent(tabsMainPane, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(lblLog, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addContainerGap())
+                .addComponent(lblLog)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -526,7 +556,7 @@ public class Client extends javax.swing.JFrame implements IAlert {
             pnlLogin.setVisible(false);
             lblUsername.setText(txtUsername.getText());
             pnlLogout.setVisible(true);
-            if (txtUsername.getText().equals("admin")) {
+            if (txtUsername.getText().equals("admin@admin.com")) {
                 pnlRegister.setVisible(true);
             } else {
                 tabsMainPane.setEnabledAt(2, false);
@@ -537,9 +567,12 @@ public class Client extends javax.swing.JFrame implements IAlert {
     }//GEN-LAST:event_btnLoginActionPerformed
 
     private void btnTokenizeActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnTokenizeActionPerformed
-        lblOutput.setText(this.tokenize());
-        lblResultType.setText("Token: ");
-        btnCopy.setVisible(true);
+        String receivedToken = this.tokenize();
+        if (receivedToken.length() == 16) {
+            lblOutput.setText(receivedToken);
+            lblResultType.setText("Token: ");
+            btnCopy.setVisible(true);
+        }
     }//GEN-LAST:event_btnTokenizeActionPerformed
 
     private void btnCopyActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnCopyActionPerformed
@@ -550,37 +583,143 @@ public class Client extends javax.swing.JFrame implements IAlert {
     }//GEN-LAST:event_btnCopyActionPerformed
 
     private void btnRetrieveActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnRetrieveActionPerformed
-        // TODO add your handling code here:
-        lblOutput.setText(this.retrieve());
-        lblResultType.setText("Card Id: ");
-        btnCopy.setVisible(true);
+        String receivedCardId = this.retrieve();
+        if (receivedCardId.length() == 16) {
+            lblOutput.setText(receivedCardId);
+            lblResultType.setText("Card Id: ");
+            btnCopy.setVisible(true);
+        }
     }//GEN-LAST:event_btnRetrieveActionPerformed
 
     private void btnLogoutActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnLogoutActionPerformed
         try {
             logout();
+            pnlLogout.setVisible(false);
+            pnlLogin.setVisible(true);
+            txtUsername.setText("username");
+            txtPassword.setText("   ");
+            pnlResult.setVisible(false);
+            txtInput.setText("");
+            lblOutput.setText("");
+            lblResultType.setText("");
+            btnCopy.setVisible(false);
+            tabsMainPane.setSelectedIndex(2);
+            pnlRegister.setVisible(false);
+            tabsMainPane.setEnabledAt(1, false);
+            tabsMainPane.setEnabledAt(2, true);
         } catch (NotBoundException ex) {
             Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
         }
-        pnlLogout.setVisible(false);
-        pnlLogin.setVisible(true);
-        txtUsername.setText("Username");
-        txtPassword.setText("   ");
-        pnlResult.setVisible(false);
-        txtInput.setText("");
-        lblOutput.setText("");
-        lblResultType.setText("");
-        btnCopy.setVisible(false);
-        tabsMainPane.setSelectedIndex(2);
-        pnlRegister.setVisible(false);
-        tabsMainPane.setEnabledAt(1, false);
-        tabsMainPane.setEnabledAt(2, true);
     }//GEN-LAST:event_btnLogoutActionPerformed
 
     private void btnRegisterUserActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnRegisterUserActionPerformed
-        // TODO add your handling code here:
         this.register();
     }//GEN-LAST:event_btnRegisterUserActionPerformed
+
+    private void txtBoxFocusGained(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_txtBoxFocusGained
+        ((JTextField) evt.getSource()).selectAll();
+    }//GEN-LAST:event_txtBoxFocusGained
+
+    private void txtPasswordFocusGained(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_txtPasswordFocusGained
+        txtPassword.selectAll();
+    }//GEN-LAST:event_txtPasswordFocusGained
+
+    private void txtRegisterUsernameFocusGained(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_txtRegisterUsernameFocusGained
+        txtRegisterUsername.selectAll();
+    }//GEN-LAST:event_txtRegisterUsernameFocusGained
+
+    private void txtRegisterPasswordFocusGained(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_txtRegisterPasswordFocusGained
+        txtRegisterPassword.selectAll();
+    }//GEN-LAST:event_txtRegisterPasswordFocusGained
+
+    private void txtInputFocusGained(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_txtInputFocusGained
+        txtInput.selectAll();
+    }//GEN-LAST:event_txtInputFocusGained
+
+    private void txtUsernameKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_txtUsernameKeyTyped
+        boolean isValidInput = ((JTextField) evt.getSource())
+                .getText()
+                .matches(this.EMAIL_PATTERN);
+        if (!isValidInput) {
+            btnLogin.setEnabled(false);
+            lblLog.setForeground(Color.RED);
+            lblLog.setText("Invalid username format!");
+        }
+        if (isValidInput) {
+            lblLog.setText("");
+        }
+        if (isValidInput && txtPassword.getText().matches(this.PASSOWRD_PATTERN)) {
+            btnLogin.setEnabled(true);
+        }
+    }//GEN-LAST:event_txtUsernameKeyTyped
+
+    private void txtPasswordKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_txtPasswordKeyTyped
+        boolean isValidInput = ((JTextField) evt.getSource())
+                .getText()
+                .matches(this.PASSOWRD_PATTERN);
+        if (!isValidInput) {
+            btnLogin.setEnabled(false);
+            lblLog.setForeground(Color.RED);
+            lblLog.setText("Invalid password format!");
+        }
+        if (isValidInput) {
+            lblLog.setText("");
+        }
+        if (isValidInput && txtUsername.getText().matches(this.EMAIL_PATTERN)) {
+            btnLogin.setEnabled(true);
+        }
+    }//GEN-LAST:event_txtPasswordKeyTyped
+
+    private void txtInputKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_txtInputKeyTyped
+        boolean isValidInput = ((JTextField) evt.getSource())
+                .getText()
+                .matches(this.CARD_INPUT_PATTERN);
+        if (!isValidInput) {
+            btnTokenize.setEnabled(false);
+            btnRetrieve.setEnabled(false);
+            lblLog.setForeground(Color.RED);
+            lblLog.setText("Input should be 16 digits");
+        }
+        if (isValidInput) {
+            lblLog.setText("");
+            btnTokenize.setEnabled(true);
+            btnRetrieve.setEnabled(true);
+        }
+    }//GEN-LAST:event_txtInputKeyTyped
+
+    private void txtRegisterUsernameKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_txtRegisterUsernameKeyTyped
+        boolean isValidInput = ((JTextField) evt.getSource())
+                .getText()
+                .matches(this.EMAIL_PATTERN);
+        if (!isValidInput) {
+            btnRegisterUser.setEnabled(false);
+            lblLog.setForeground(Color.RED);
+            lblLog.setText("Invalid username format!");
+        }
+        if (isValidInput) {
+            lblLog.setText("");
+        }
+        if (isValidInput && txtRegisterPassword.getText().matches(this.PASSOWRD_PATTERN)) {
+            btnRegisterUser.setEnabled(true);
+        }
+    }//GEN-LAST:event_txtRegisterUsernameKeyTyped
+
+    private void txtRegisterPasswordKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_txtRegisterPasswordKeyTyped
+        boolean isValidInput = ((JTextField) evt.getSource())
+                .getText()
+                .matches(this.PASSOWRD_PATTERN);
+        if (!isValidInput) {
+            btnRegisterUser.setEnabled(false);
+            lblLog.setForeground(Color.RED);
+            lblLog.setText("Invalid password format!");
+        }
+        if (isValidInput) {
+            lblLog.setText("");
+        }
+        if (isValidInput && txtRegisterUsername.getText().matches(this.EMAIL_PATTERN)) {
+            btnRegisterUser.setEnabled(true);
+        }
+    }//GEN-LAST:event_txtRegisterPasswordKeyTyped
 
     /**
      * @param args the command line arguments
@@ -609,9 +748,6 @@ public class Client extends javax.swing.JFrame implements IAlert {
         }
         //</editor-fold>
         //</editor-fold>
-
-        // Client methods =============================================================================================
-        // Client methods =============================================================================================        
         /* Create and display the form */
         java.awt.EventQueue.invokeLater(() -> {
             try {
@@ -621,7 +757,6 @@ public class Client extends javax.swing.JFrame implements IAlert {
             }
         });
     }
-
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton btnCopy;
     private javax.swing.JButton btnLogin;
@@ -651,9 +786,4 @@ public class Client extends javax.swing.JFrame implements IAlert {
     private javax.swing.JTextField txtRegisterUsername;
     private javax.swing.JTextField txtUsername;
     // End of variables declaration//GEN-END:variables
-
-    @Override
-    public void alert(String message) throws RemoteException {
-        lblLog.setText(message);
-    }
 }

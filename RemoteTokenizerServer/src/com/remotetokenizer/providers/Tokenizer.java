@@ -18,20 +18,25 @@ import java.util.stream.Stream;
 public class Tokenizer {
 
     public boolean checkCardId(String cardId) {
-        int cardIdDigits[] = Stream
-                .of(cardId.split(""))
-                .mapToInt(n -> Integer.parseInt(n))
-                .toArray();
-        int sum = 0;
-        int length = cardIdDigits.length;
-        for (int i = 0; i < length; i++) {
-            int digit = cardIdDigits[length - i - 1];
-            if (i % 2 == 1) {
-                digit *= 2;
+        boolean isValid = false;
+        int length = cardId.length();
+        if (length == 16) {
+            int cardIdDigits[] = Stream
+                    .of(cardId.split(""))
+                    .mapToInt(n -> Integer.parseInt(n))
+                    .toArray();
+            int sum = 0;
+            for (int i = 0; i < length; i++) {
+                int digit = cardIdDigits[length - i - 1];
+                if (i % 2 == 1) {
+                    digit *= 2;
+                }
+                sum += digit > 9 ? digit - 9 : digit;
             }
-            sum += digit > 9 ? digit - 9 : digit;
+            isValid = sum % 10 == 0;
         }
-        return sum % 10 == 0;
+
+        return isValid;
     }
 
     public String tokenize(String cardId) {

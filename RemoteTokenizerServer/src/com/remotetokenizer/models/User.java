@@ -52,7 +52,7 @@ public final class User implements Serializable{
     }
 
     public void setPassword(String password) {
-        if (name.length() < 5) {
+        if (password.length() < 8) {
             throw new IllegalArgumentException("Passed invalid password!");
         } else {
             this.password = password;
@@ -77,7 +77,7 @@ public final class User implements Serializable{
 
     @Override
     public String toString() {
-        return String.format("Name: %s\nCan tokenize: %b\nCan retrieve: %b", this.getName(), this.getCanTokenize(), this.getCanRetrieve());
+        return String.format("Name: %s\nCan tokenize: %b. Can retrieve: %b", this.getName(), this.getCanTokenize(), this.getCanRetrieve());
     }
 
 }

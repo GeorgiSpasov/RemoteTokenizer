@@ -42,8 +42,8 @@
               <Component id="tabsMainPane" alignment="0" max="32767" attributes="0"/>
               <Group type="102" alignment="0" attributes="0">
                   <EmptySpace max="-2" attributes="0"/>
-                  <Component id="lblLog" min="-2" pref="350" max="-2" attributes="0"/>
-                  <EmptySpace max="32767" attributes="0"/>
+                  <Component id="lblLog" max="32767" attributes="0"/>
+                  <EmptySpace max="-2" attributes="0"/>
               </Group>
           </Group>
         </DimensionLayout>
@@ -52,8 +52,8 @@
               <Group type="102" alignment="0" attributes="0">
                   <Component id="tabsMainPane" min="-2" max="-2" attributes="0"/>
                   <EmptySpace max="-2" attributes="0"/>
-                  <Component id="lblLog" max="32767" attributes="0"/>
-                  <EmptySpace max="-2" attributes="0"/>
+                  <Component id="lblLog" min="-2" max="-2" attributes="0"/>
+                  <EmptySpace max="32767" attributes="0"/>
               </Group>
           </Group>
         </DimensionLayout>
@@ -203,22 +203,20 @@
                           <Group type="102" alignment="0" attributes="0">
                               <EmptySpace max="-2" attributes="0"/>
                               <Group type="103" groupAlignment="0" attributes="0">
-                                  <Group type="102" alignment="0" attributes="0">
-                                      <Component id="lblResultType" min="-2" pref="77" max="-2" attributes="0"/>
-                                      <EmptySpace type="unrelated" max="-2" attributes="0"/>
-                                      <Component id="lblOutput" min="-2" pref="183" max="-2" attributes="0"/>
-                                  </Group>
-                                  <Group type="102" alignment="0" attributes="0">
-                                      <Component id="txtInput" min="-2" pref="189" max="-2" attributes="0"/>
+                                  <Group type="102" attributes="0">
+                                      <Component id="lblResultType" min="-2" pref="59" max="-2" attributes="0"/>
                                       <EmptySpace max="-2" attributes="0"/>
-                                      <Component id="btnTokenize" min="-2" max="-2" attributes="0"/>
+                                      <Component id="lblOutput" min="-2" pref="115" max="-2" attributes="0"/>
                                   </Group>
+                                  <Component id="txtInput" min="-2" pref="189" max="-2" attributes="0"/>
                               </Group>
                               <EmptySpace max="-2" attributes="0"/>
-                              <Group type="103" groupAlignment="0" attributes="0">
-                                  <Component id="btnRetrieve" alignment="0" min="-2" max="-2" attributes="0"/>
-                                  <Component id="btnCopy" alignment="0" min="-2" pref="77" max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="0" max="-2" attributes="0">
+                                  <Component id="btnTokenize" max="32767" attributes="0"/>
+                                  <Component id="btnCopy" max="32767" attributes="0"/>
                               </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="btnRetrieve" min="-2" max="-2" attributes="0"/>
                               <EmptySpace max="32767" attributes="0"/>
                           </Group>
                       </Group>
@@ -247,6 +245,7 @@
                     <Component class="javax.swing.JButton" name="btnTokenize">
                       <Properties>
                         <Property name="text" type="java.lang.String" value="Tokenize"/>
+                        <Property name="enabled" type="boolean" value="false"/>
                       </Properties>
                       <Events>
                         <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="btnTokenizeActionPerformed"/>
@@ -254,7 +253,7 @@
                     </Component>
                     <Component class="javax.swing.JLabel" name="lblOutput">
                       <Properties>
-                        <Property name="text" type="java.lang.String" value="Output"/>
+                        <Property name="text" type="java.lang.String" value=" "/>
                       </Properties>
                     </Component>
                     <Component class="javax.swing.JButton" name="btnCopy">
@@ -269,10 +268,15 @@
                       <Properties>
                         <Property name="toolTipText" type="java.lang.String" value="Input"/>
                       </Properties>
+                      <Events>
+                        <EventHandler event="focusGained" listener="java.awt.event.FocusListener" parameters="java.awt.event.FocusEvent" handler="txtInputFocusGained"/>
+                        <EventHandler event="keyTyped" listener="java.awt.event.KeyListener" parameters="java.awt.event.KeyEvent" handler="txtInputKeyTyped"/>
+                      </Events>
                     </Component>
                     <Component class="javax.swing.JButton" name="btnRetrieve">
                       <Properties>
                         <Property name="text" type="java.lang.String" value="Retrieve"/>
+                        <Property name="enabled" type="boolean" value="false"/>
                       </Properties>
                       <Events>
                         <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="btnRetrieveActionPerformed"/>
@@ -280,7 +284,7 @@
                     </Component>
                     <Component class="javax.swing.JLabel" name="lblResultType">
                       <Properties>
-                        <Property name="text" type="java.lang.String" value="Resul Type"/>
+                        <Property name="text" type="java.lang.String" value=" "/>
                       </Properties>
                     </Component>
                   </SubComponents>
@@ -365,12 +369,18 @@
                   <SubComponents>
                     <Component class="javax.swing.JTextField" name="txtUsername">
                       <Properties>
-                        <Property name="text" type="java.lang.String" value="Username"/>
+                        <Property name="text" type="java.lang.String" value="username"/>
+                        <Property name="toolTipText" type="java.lang.String" value="Username"/>
                       </Properties>
+                      <Events>
+                        <EventHandler event="focusGained" listener="java.awt.event.FocusListener" parameters="java.awt.event.FocusEvent" handler="txtBoxFocusGained"/>
+                        <EventHandler event="keyTyped" listener="java.awt.event.KeyListener" parameters="java.awt.event.KeyEvent" handler="txtUsernameKeyTyped"/>
+                      </Events>
                     </Component>
                     <Component class="javax.swing.JButton" name="btnLogin">
                       <Properties>
                         <Property name="text" type="java.lang.String" value="Login"/>
+                        <Property name="enabled" type="boolean" value="false"/>
                       </Properties>
                       <Events>
                         <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="btnLoginActionPerformed"/>
@@ -378,8 +388,13 @@
                     </Component>
                     <Component class="javax.swing.JPasswordField" name="txtPassword">
                       <Properties>
-                        <Property name="text" type="java.lang.String" value="jPasswordField1"/>
+                        <Property name="text" type="java.lang.String" value="***"/>
+                        <Property name="toolTipText" type="java.lang.String" value="Password"/>
                       </Properties>
+                      <Events>
+                        <EventHandler event="focusGained" listener="java.awt.event.FocusListener" parameters="java.awt.event.FocusEvent" handler="txtPasswordFocusGained"/>
+                        <EventHandler event="keyTyped" listener="java.awt.event.KeyListener" parameters="java.awt.event.KeyEvent" handler="txtPasswordKeyTyped"/>
+                      </Events>
                     </Component>
                   </SubComponents>
                 </Container>
@@ -453,6 +468,7 @@
                     <Component class="javax.swing.JButton" name="btnRegisterUser">
                       <Properties>
                         <Property name="text" type="java.lang.String" value="Register"/>
+                        <Property name="enabled" type="boolean" value="false"/>
                       </Properties>
                       <Events>
                         <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="btnRegisterUserActionPerformed"/>
@@ -460,13 +476,23 @@
                     </Component>
                     <Component class="javax.swing.JTextField" name="txtRegisterUsername">
                       <Properties>
-                        <Property name="text" type="java.lang.String" value="Username"/>
+                        <Property name="text" type="java.lang.String" value="username"/>
+                        <Property name="toolTipText" type="java.lang.String" value="Username"/>
                       </Properties>
+                      <Events>
+                        <EventHandler event="focusGained" listener="java.awt.event.FocusListener" parameters="java.awt.event.FocusEvent" handler="txtRegisterUsernameFocusGained"/>
+                        <EventHandler event="keyTyped" listener="java.awt.event.KeyListener" parameters="java.awt.event.KeyEvent" handler="txtRegisterUsernameKeyTyped"/>
+                      </Events>
                     </Component>
                     <Component class="javax.swing.JPasswordField" name="txtRegisterPassword">
                       <Properties>
-                        <Property name="text" type="java.lang.String" value="jPasswordField1"/>
+                        <Property name="text" type="java.lang.String" value="***"/>
+                        <Property name="toolTipText" type="java.lang.String" value="Password"/>
                       </Properties>
+                      <Events>
+                        <EventHandler event="focusGained" listener="java.awt.event.FocusListener" parameters="java.awt.event.FocusEvent" handler="txtRegisterPasswordFocusGained"/>
+                        <EventHandler event="keyTyped" listener="java.awt.event.KeyListener" parameters="java.awt.event.KeyEvent" handler="txtRegisterPasswordKeyTyped"/>
+                      </Events>
                     </Component>
                   </SubComponents>
                 </Container>
@@ -476,7 +502,7 @@
         </Container>
         <Component class="javax.swing.JLabel" name="lblLog">
           <Properties>
-            <Property name="text" type="java.lang.String" value="Log"/>
+            <Property name="text" type="java.lang.String" value=" "/>
           </Properties>
         </Component>
       </SubComponents>

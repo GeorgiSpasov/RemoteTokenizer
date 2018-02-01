@@ -13,12 +13,19 @@ import com.remotetokenizer.contracts.IAuthentication;
 import com.remotetokenizer.contracts.IRegister;
 import com.remotetokenizer.contracts.IRetriever;
 import com.remotetokenizer.contracts.ITokenizer;
+import com.remotetokenizer.models.Token;
 import com.remotetokenizer.providers.WriteMode;
 import java.awt.event.ItemEvent;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.rmi.NoSuchObjectException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -27,6 +34,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
+import javax.swing.JFileChooser;
+import javax.swing.JTextField;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.filechooser.FileSystemView;
 
 /**
  *
@@ -34,6 +46,7 @@ import java.util.logging.Logger;
  */
 public class Server extends javax.swing.JFrame {
 
+    private Registry registry;
     private final Map<UUID, User> logedUsers;
 
     /**
@@ -41,44 +54,16 @@ public class Server extends javax.swing.JFrame {
      */
     public Server() {
         initComponents();
-
-        logedUsers = new ConcurrentHashMap<>();//TODO: Concurent==========================
+        logedUsers = new ConcurrentHashMap<>();
         btnConnection.addItemListener((ItemEvent ev) -> {
             if (ev.getStateChange() == ItemEvent.SELECTED) {
                 btnConnection.setText("Stop");
             } else if (ev.getStateChange() == ItemEvent.DESELECTED) {
-                btnConnection.setText("Run");
+                btnConnection.setText("Start");
             }
         });
     }
 
-    // Server methods ==========================================================
-    public void startServer(int portNumber) throws RemoteException {
-        try {
-            Registry registry = LocateRegistry.createRegistry(portNumber);
-            IAuthentication authentication = new AuthenticationService();
-            registry.rebind(IAuthentication.LOOKUPNAME, authentication);
-            ITokenizer tokenizer = new TokenizerService();
-            registry.rebind(ITokenizer.LOOKUPNAME, tokenizer);
-            IRetriever retriever = new RetrieverService();
-            registry.rebind(IRetriever.LOOKUPNAME, retriever);
-            IRegister registrar = new RegisterUserService();
-            registry.rebind(IRegister.LOOKUPNAME, registrar);
-            this.txtServerLog
-                    .append((String.format("%s Service running at %d port...\n", IAuthentication.LOOKUPNAME, portNumber)));
-            this.txtServerLog
-                    .append((String.format("%s Service running at %d port...\n", ITokenizer.LOOKUPNAME, portNumber)));
-            this.txtServerLog
-                    .append((String.format("%s Service running at %d port...\n", IRetriever.LOOKUPNAME, portNumber)));
-            this.txtServerLog
-                    .append((String.format("%s Service running at %d port...", IRegister.LOOKUPNAME, portNumber)));
-        } catch (RemoteException e) {
-            System.out.println(e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    // Server methods ==========================================================
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -105,12 +90,12 @@ public class Server extends javax.swing.JFrame {
         jPanel2 = new javax.swing.JPanel();
         btnAllUsers = new javax.swing.JButton();
         txtFindUser = new javax.swing.JTextField();
-        btnFindUser = new javax.swing.JButton();
         jScrollPane3 = new javax.swing.JScrollPane();
         txtUsersOutput = new javax.swing.JTextArea();
+        btnSaveUsers = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-        setTitle("Remote Tokenizer Server");
+        setTitle("RMI Tokenizer Server");
 
         btnConnection.setText("Run");
         btnConnection.addActionListener(new java.awt.event.ActionListener() {
@@ -121,7 +106,7 @@ public class Server extends javax.swing.JFrame {
 
         lblStatus.setText("Status");
 
-        lblStatusOutput.setText("Not running");
+        lblStatusOutput.setText("Offline");
 
         txtServerLog.setEditable(false);
         txtServerLog.setColumns(20);
@@ -135,12 +120,12 @@ public class Server extends javax.swing.JFrame {
             .addGroup(pnlHomeLayout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(pnlHomeLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jScrollPane1)
+                    .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 296, Short.MAX_VALUE)
                     .addGroup(pnlHomeLayout.createSequentialGroup()
                         .addComponent(lblStatus)
                         .addGap(18, 18, 18)
-                        .addComponent(lblStatusOutput, javax.swing.GroupLayout.PREFERRED_SIZE, 200, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 108, Short.MAX_VALUE)
+                        .addComponent(lblStatusOutput, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addGap(18, 18, 18)
                         .addComponent(btnConnection)))
                 .addContainerGap())
         );
@@ -153,17 +138,32 @@ public class Server extends javax.swing.JFrame {
                     .addComponent(lblStatus)
                     .addComponent(lblStatusOutput))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 272, Short.MAX_VALUE)
+                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 317, Short.MAX_VALUE)
                 .addContainerGap())
         );
 
         tabsServer.addTab("Home", pnlHome);
 
         btnListTokens.setText("Tokens");
+        btnListTokens.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnListTokensActionPerformed(evt);
+            }
+        });
 
         btnListCards.setText("Card IDs");
+        btnListCards.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnListCardsActionPerformed(evt);
+            }
+        });
 
         btnSaveTokens.setText("Save to File");
+        btnSaveTokens.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnSaveTokensActionPerformed(evt);
+            }
+        });
 
         txtTokensOutput.setEditable(false);
         txtTokensOutput.setColumns(20);
@@ -180,11 +180,10 @@ public class Server extends javax.swing.JFrame {
                     .addComponent(jScrollPane2)
                     .addGroup(jPanel1Layout.createSequentialGroup()
                         .addComponent(btnListTokens)
-                        .addGap(18, 18, 18)
+                        .addGap(26, 26, 26)
                         .addComponent(btnListCards)
-                        .addGap(18, 18, 18)
-                        .addComponent(btnSaveTokens)
-                        .addGap(0, 135, Short.MAX_VALUE)))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 26, Short.MAX_VALUE)
+                        .addComponent(btnSaveTokens)))
                 .addContainerGap())
         );
         jPanel1Layout.setVerticalGroup(
@@ -196,22 +195,42 @@ public class Server extends javax.swing.JFrame {
                     .addComponent(btnListCards)
                     .addComponent(btnSaveTokens))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 272, Short.MAX_VALUE)
+                .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 317, Short.MAX_VALUE)
                 .addContainerGap())
         );
 
         tabsServer.addTab("Tokens", jPanel1);
 
         btnAllUsers.setText("All Users");
+        btnAllUsers.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnAllUsersActionPerformed(evt);
+            }
+        });
 
-        txtFindUser.setText("Username");
-
-        btnFindUser.setText("Find");
+        txtFindUser.setText("Find user");
+        txtFindUser.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent evt) {
+                txtFindUserFocusGained(evt);
+            }
+        });
+        txtFindUser.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyPressed(java.awt.event.KeyEvent evt) {
+                txtFindUserKeyPressed(evt);
+            }
+        });
 
         txtUsersOutput.setEditable(false);
         txtUsersOutput.setColumns(20);
         txtUsersOutput.setRows(5);
         jScrollPane3.setViewportView(txtUsersOutput);
+
+        btnSaveUsers.setText("Save to File");
+        btnSaveUsers.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnSaveUsersActionPerformed(evt);
+            }
+        });
 
         javax.swing.GroupLayout jPanel2Layout = new javax.swing.GroupLayout(jPanel2);
         jPanel2.setLayout(jPanel2Layout);
@@ -220,12 +239,11 @@ public class Server extends javax.swing.JFrame {
             .addGroup(jPanel2Layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jScrollPane3)
+                    .addComponent(txtFindUser)
+                    .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 296, Short.MAX_VALUE)
                     .addGroup(jPanel2Layout.createSequentialGroup()
-                        .addComponent(txtFindUser, javax.swing.GroupLayout.DEFAULT_SIZE, 257, Short.MAX_VALUE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(btnFindUser)
-                        .addGap(18, 18, 18)
+                        .addComponent(btnSaveUsers)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                         .addComponent(btnAllUsers)))
                 .addContainerGap())
         );
@@ -233,12 +251,13 @@ public class Server extends javax.swing.JFrame {
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel2Layout.createSequentialGroup()
                 .addContainerGap()
+                .addComponent(txtFindUser, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(btnAllUsers)
-                    .addComponent(txtFindUser, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(btnFindUser))
+                    .addComponent(btnSaveUsers))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 272, Short.MAX_VALUE)
+                .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 287, Short.MAX_VALUE)
                 .addContainerGap())
         );
 
@@ -248,13 +267,15 @@ public class Server extends javax.swing.JFrame {
         pnlServerGUI.setLayout(pnlServerGUILayout);
         pnlServerGUILayout.setHorizontalGroup(
             pnlServerGUILayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(tabsServer, javax.swing.GroupLayout.PREFERRED_SIZE, 429, javax.swing.GroupLayout.PREFERRED_SIZE)
+            .addGroup(pnlServerGUILayout.createSequentialGroup()
+                .addComponent(tabsServer, javax.swing.GroupLayout.PREFERRED_SIZE, 310, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(0, 0, Short.MAX_VALUE))
         );
         pnlServerGUILayout.setVerticalGroup(
             pnlServerGUILayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(pnlServerGUILayout.createSequentialGroup()
-                .addComponent(tabsServer, javax.swing.GroupLayout.PREFERRED_SIZE, 348, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(28, Short.MAX_VALUE))
+                .addComponent(tabsServer, javax.swing.GroupLayout.PREFERRED_SIZE, 393, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(0, 0, Short.MAX_VALUE))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -271,14 +292,149 @@ public class Server extends javax.swing.JFrame {
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
-    private void btnConnectionActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnConnectionActionPerformed
+    public void startServer(int portNumber) throws RemoteException {
         try {
-            // TODO add your handling code here:
-            startServer(1099);
-        } catch (RemoteException ex) {
-            Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
+            registry = LocateRegistry.createRegistry(portNumber);
+            IAuthentication authentication = new AuthenticationService();
+            registry.rebind(IAuthentication.LOOKUPNAME, authentication);
+            this.txtServerLog
+                    .append((String.format("%s Service running at %d port...\n", IAuthentication.LOOKUPNAME, portNumber)));
+            ITokenizer tokenizer = new TokenizerService();
+            registry.rebind(ITokenizer.LOOKUPNAME, tokenizer);
+            this.txtServerLog
+                    .append((String.format("%s Service running at %d port...\n", ITokenizer.LOOKUPNAME, portNumber)));
+            IRetriever retriever = new RetrieverService();
+            registry.rebind(IRetriever.LOOKUPNAME, retriever);
+            this.txtServerLog
+                    .append((String.format("%s Service running at %d port...\n", IRetriever.LOOKUPNAME, portNumber)));
+            IRegister registrar = new RegisterUserService();
+            registry.rebind(IRegister.LOOKUPNAME, registrar);
+            this.txtServerLog
+                    .append((String.format("%s Service running at %d port...", IRegister.LOOKUPNAME, portNumber)));
+        } catch (RemoteException e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
+    }
+
+    private void btnConnectionActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnConnectionActionPerformed
+        if (btnConnection.getModel().isSelected()) {
+            try {
+                startServer(1099);
+                txtServerLog.append("\nServer started... \n" + LocalDateTime.now());
+                lblStatusOutput.setText("Online");
+            } catch (RemoteException ex) {
+                txtServerLog.append("\n"+ex.getMessage());
+                Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
+                btnConnection.setSelected(false);
+            }
+        } else {
+            try {
+                UnicastRemoteObject.unexportObject(registry, true);
+                lblStatusOutput.setText("Offline");
+                txtServerLog.append("\nServer stopped... \n" + LocalDateTime.now() + "\n");
+            } catch (NoSuchObjectException ex) {
+                Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
+            }
         }
     }//GEN-LAST:event_btnConnectionActionPerformed
+
+    private void btnListTokensActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnListTokensActionPerformed
+        XMLStream stream = new XMLStream();
+        Map<String, String> tokensFromXML = stream.<HashMap<String, String>>readXML("tokens.xml");
+        List<Token> tokenObjects = new ArrayList<Token>();
+        for (Map.Entry<String, String> entry : tokensFromXML.entrySet()) {
+            tokenObjects.add(new Token(entry.getKey(), entry.getValue()));
+        }
+        List<Token> sortedTokens = tokenObjects
+                .stream()
+                .sorted((a, b) -> (a.getTokenString().compareTo(b.getTokenString())))
+                .collect(Collectors.toList());
+        txtTokensOutput.setText("");
+        txtTokensOutput.append("Tokens\t         <->\t        Card Ids\n");
+        for (Token tokenObject : sortedTokens) {
+            txtTokensOutput.append(tokenObject.toString() + "\n");
+        }
+    }//GEN-LAST:event_btnListTokensActionPerformed
+
+    private void btnListCardsActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnListCardsActionPerformed
+        XMLStream stream = new XMLStream();
+        Map<String, String> tokensFromXML = stream.<HashMap<String, String>>readXML("tokens.xml");
+        List<Token> tokenObjects = new ArrayList<Token>();
+        for (Map.Entry<String, String> entry : tokensFromXML.entrySet()) {
+            tokenObjects.add(new Token(entry.getKey(), entry.getValue()));
+        }
+        List<Token> sortedTokens = tokenObjects
+                .stream()
+                .sorted((a, b) -> a.getCardId().compareTo(b.getCardId()))
+                .collect(Collectors.toList());
+        txtTokensOutput.setText("");
+        txtTokensOutput.append("Tokens\t         <->\t        Card Ids\n");
+        for (Token tokenObject : sortedTokens) {
+            txtTokensOutput.append(tokenObject.toString() + "\n");
+        }
+    }//GEN-LAST:event_btnListCardsActionPerformed
+
+    private void btnAllUsersActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnAllUsersActionPerformed
+        XMLStream stream = new XMLStream();
+        txtUsersOutput.setText("");
+        stream.<ArrayList<User>>readXML("users.xml")
+                .stream()
+                .sorted((a, b) -> a.getName().compareTo(b.getName())).collect(Collectors.toList())
+                .forEach(u -> txtUsersOutput.append(u.toString() + "\n\n"));
+    }//GEN-LAST:event_btnAllUsersActionPerformed
+
+    private void txtFindUserFocusGained(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_txtFindUserFocusGained
+        ((JTextField) evt.getSource()).selectAll();
+    }//GEN-LAST:event_txtFindUserFocusGained
+
+    private void txtFindUserKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_txtFindUserKeyPressed
+        String name = txtFindUser.getText();
+        XMLStream stream = new XMLStream();
+        txtUsersOutput.setText("");
+        stream.<ArrayList<User>>readXML("users.xml")
+                .stream()
+                .filter(u -> u.getName().toUpperCase().contains(name.toUpperCase()))
+                .sorted((a, b) -> a.getName().compareTo(b.getName()))
+                .forEach(u -> txtUsersOutput.append(u.toString() + "\n\n"));
+    }//GEN-LAST:event_txtFindUserKeyPressed
+
+    private void btnSaveTokensActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnSaveTokensActionPerformed
+        JFileChooser fc = new JFileChooser(FileSystemView.getFileSystemView().getHomeDirectory());
+        fc.setAcceptAllFileFilterUsed(false);
+        FileNameExtensionFilter filter = new FileNameExtensionFilter("TEXT FILES", "txt", "text");
+        fc.addChoosableFileFilter(filter);
+        fc.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
+        int i = fc.showSaveDialog(this);
+        if (i == JFileChooser.APPROVE_OPTION) {
+            File f = fc.getSelectedFile();
+            String filepath = f.getPath();
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(filepath + ".txt"))) {
+                txtTokensOutput.write(writer);
+            } catch (IOException ex) {
+                Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+    }//GEN-LAST:event_btnSaveTokensActionPerformed
+
+    private void btnSaveUsersActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnSaveUsersActionPerformed
+        JFileChooser fc = new JFileChooser(FileSystemView.getFileSystemView().getHomeDirectory());
+        fc.setAcceptAllFileFilterUsed(false);
+        FileNameExtensionFilter filter = new FileNameExtensionFilter("TEXT FILES", "txt", "text");
+        fc.addChoosableFileFilter(filter);
+        fc.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
+        int i = fc.showSaveDialog(this);
+        if (i == JFileChooser.APPROVE_OPTION) {
+            File f = fc.getSelectedFile();
+            String filepath = f.getPath();
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(filepath + ".txt"))) {
+                txtUsersOutput.write(writer);
+            } catch (IOException ex) {
+                Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+    }//GEN-LAST:event_btnSaveUsersActionPerformed
 
     /**
      * @param args the command line arguments
@@ -307,8 +463,6 @@ public class Server extends javax.swing.JFrame {
         }
         //</editor-fold>
 
-        // Server methods ======================================================
-        // Server methods ======================================================  
         /* Create and display the form */
         java.awt.EventQueue.invokeLater(() -> {
             new Server().setVisible(true);
@@ -318,10 +472,10 @@ public class Server extends javax.swing.JFrame {
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton btnAllUsers;
     private javax.swing.JToggleButton btnConnection;
-    private javax.swing.JButton btnFindUser;
     private javax.swing.JButton btnListCards;
     private javax.swing.JButton btnListTokens;
     private javax.swing.JButton btnSaveTokens;
+    private javax.swing.JButton btnSaveUsers;
     private javax.swing.JPanel jPanel1;
     private javax.swing.JPanel jPanel2;
     private javax.swing.JScrollPane jScrollPane1;
@@ -361,6 +515,7 @@ public class Server extends javax.swing.JFrame {
             } else {
                 alertUser.alert("Login Failed");
             }
+
             return sentCookie;
         }
 
@@ -369,7 +524,6 @@ public class Server extends javax.swing.JFrame {
             logedUsers.remove(cookie);
             alertUser.alert("Logged out");
         }
-
     }
 
     class TokenizerService extends UnicastRemoteObject implements ITokenizer {
@@ -383,7 +537,7 @@ public class Server extends javax.swing.JFrame {
             boolean canTokenize = true == logedUsers.get(cookie).getCanTokenize();
             if (canTokenize) {
                 Tokenizer tokenizer = new Tokenizer();
-                boolean cardIdCheck = tokenizer.checkCardId(cardId); //========================
+                boolean cardIdCheck = tokenizer.checkCardId(cardId);
                 if (cardIdCheck) {
                     result = tokenizer.tokenize(cardId);
                     XMLStream stream = new XMLStream();
