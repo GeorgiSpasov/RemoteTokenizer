@@ -7,14 +7,15 @@ package com.remotetokenizer.contracts;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+import java.util.UUID;
 
 /**
  *
  * @author Georgi Spasov
  */
-public interface IAlert extends Remote {
+public interface ITokenizer extends Remote {
 
-    public static final String LOOKUPNAME = "Alert";
+    public static final String LOOKUPNAME = "Tokenizer";
 
-    public void alert(String message) throws RemoteException;
+    public String createToken(String bankId, UUID cookie) throws RemoteException;
 }

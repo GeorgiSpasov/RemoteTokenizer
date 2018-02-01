@@ -3,9 +3,8 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.remotetokenizer.core;
+package com.remotetokenizer.client;
 
-import com.remotetokenizer.contracts.IAlert;
 import com.remotetokenizer.contracts.IAuthentication;
 import com.remotetokenizer.contracts.IRegister;
 import com.remotetokenizer.contracts.IRetriever;
@@ -24,13 +23,16 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
+import com.remotetokenizer.contracts.INotification;
+import java.util.Date;
 
 /**
  *
  * @author Georgi Spasov
  */
-public class Client extends javax.swing.JFrame implements IAlert {
+public class Client extends javax.swing.JFrame implements INotification {
 
+    // Verify user input
     private static final String EMAIL_PATTERN
             = "^[_A-Za-z0-9-\\+]+(\\.[_A-Za-z0-9-]+)*@"
             + "[A-Za-z0-9-]+(\\.[A-Za-z0-9]+)*(\\.[A-Za-z]{1,})$";
@@ -39,16 +41,19 @@ public class Client extends javax.swing.JFrame implements IAlert {
             + "(?=.*[@#$%^&+=])(?=\\S+$).{8,}$";
     private static final String CARD_INPUT_PATTERN
             = "([0-9]{16})$";
+    // User session variables
     private IAuthentication authentication;
-    private IAlert stub;
+    private INotification serverLog;
     private UUID cookie;
     private Registry registry;
+    private String logedUser;
 
     /**
      * Creates new form ClientPanelTest
      */
     public Client() throws RemoteException {
         initComponents();
+        // Visible only after successful operations
         pnlLogout.setVisible(false);
         pnlResult.setVisible(false);
         btnCopy.setVisible(false);
@@ -57,6 +62,7 @@ public class Client extends javax.swing.JFrame implements IAlert {
         lblUsername.setHorizontalAlignment(SwingConstants.RIGHT);
     }
 
+    
     public boolean login(String username, String password) {
         UUID receivedCookie = null;
         boolean isRegistered = false;
@@ -65,11 +71,14 @@ public class Client extends javax.swing.JFrame implements IAlert {
             // Getting Object using Remote Address
             this.authentication = (IAuthentication) this.registry.lookup(IAuthentication.LOOKUPNAME);
             // Assign IAlert stub for the session
-            this.stub = (IAlert) UnicastRemoteObject.exportObject(this, 0);
+            INotification notification = (INotification) UnicastRemoteObject.exportObject(this, 0);
             // Invoking the Method
-            receivedCookie = authentication.authenticate(username, password, this.stub);
+            receivedCookie = authentication.authenticate(username, password, notification);
             if (receivedCookie != null) {
                 this.cookie = receivedCookie;
+                this.serverLog = (INotification) this.registry.lookup(INotification.LOOKUPNAME);
+                this.logedUser = username;
+                this.serverLog.notify(String.format("[%1s] connected\n%tB %<te,  %<tY  %<tT %<Tp%n", this.logedUser, new Date()));
                 isRegistered = true;
             } else {
                 UnicastRemoteObject.unexportObject(this, true);
@@ -80,13 +89,14 @@ public class Client extends javax.swing.JFrame implements IAlert {
 
         return isRegistered;
     }
-
+    
     public boolean logout() throws NotBoundException {
         boolean status = false;
         try {
-            this.authentication.logOut(this.cookie, stub);
+            this.authentication.logOut(this.cookie);
             this.cookie = null;
             UnicastRemoteObject.unexportObject(this, true);
+            this.serverLog.notify(String.format("[%1s] loged out\n%tB %<te,  %<tY  %<tT %<Tp%n", this.logedUser, new Date()));
         } catch (RemoteException e) {
             lblLog.setText("Connection lost!");
         }
@@ -100,7 +110,8 @@ public class Client extends javax.swing.JFrame implements IAlert {
         ITokenizer tokenizer;
         try {
             tokenizer = (ITokenizer) this.registry.lookup(ITokenizer.LOOKUPNAME);
-            token = tokenizer.createToken(bankId, cookie, this.stub);
+            token = tokenizer.createToken(bankId, cookie);
+            this.serverLog.notify(String.format("[%1s] registered a token\n%tB %<te,  %<tY  %<tT %<Tp%n", this.logedUser, new Date()));
         } catch (RemoteException | NotBoundException e) {
             lblLog.setText("Connection lost!");
         }
@@ -114,10 +125,10 @@ public class Client extends javax.swing.JFrame implements IAlert {
         IRetriever retriever;
         try {
             retriever = (IRetriever) registry.lookup(IRetriever.LOOKUPNAME);
-            retrievedCardId = retriever.getCardId(token, this.cookie, this.stub);
+            retrievedCardId = retriever.getCardId(token, this.cookie);
+            this.serverLog.notify(String.format("[%1s] retrieved a card id\n%tB %<te,  %<tY  %<tT %<Tp%n", this.logedUser, new Date()));
         } catch (RemoteException | NotBoundException e) {
-            System.out.println(e.getMessage());
-            e.printStackTrace();
+            lblLog.setText("Connection lost!");
         }
 
         return retrievedCardId;
@@ -131,14 +142,15 @@ public class Client extends javax.swing.JFrame implements IAlert {
         IRegister registrar;
         try {
             registrar = (IRegister) this.registry.lookup(IRegister.LOOKUPNAME);
-            registrar.register(name, pass, canTokenize, canRetrieve, this.cookie, this.stub);
+            registrar.register(name, pass, canTokenize, canRetrieve, this.cookie);
+            this.serverLog.notify(String.format("[%1s] registered a new user\n%tB %<te,  %<tY  %<tT %<Tp%n", this.logedUser, new Date()));
         } catch (RemoteException | NotBoundException e) {
             this.lblLog.setText("Connection lost!");
         }
     }
 
     @Override
-    public void alert(String message) throws RemoteException {
+    public void notify(String message) throws RemoteException {
         lblLog.setForeground(Color.BLACK);
         lblLog.setText(message);
     }

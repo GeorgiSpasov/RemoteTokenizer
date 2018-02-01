@@ -35,3 +35,5 @@ hs_err_pid*
 /RemoteTokenizerClient/nbproject/private/
 /RemoteTokenizerServer/build/
 /RemoteTokenizerClient/build/
+/RemoteTokenizerServer/dist/
+/RemoteTokenizerClient/dist/

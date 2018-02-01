@@ -3,12 +3,11 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.remotetokenizer.core;
+package com.remotetokenizer.server;
 
 import com.remotetokenizer.models.User;
 import com.remotetokenizer.providers.Tokenizer;
 import com.remotetokenizer.providers.XMLStream;
-import com.remotetokenizer.contracts.IAlert;
 import com.remotetokenizer.contracts.IAuthentication;
 import com.remotetokenizer.contracts.IRegister;
 import com.remotetokenizer.contracts.IRetriever;
@@ -25,7 +24,6 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -39,6 +37,8 @@ import javax.swing.JFileChooser;
 import javax.swing.JTextField;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.filechooser.FileSystemView;
+import com.remotetokenizer.contracts.INotification;
+import java.util.Date;
 
 /**
  *
@@ -48,6 +48,9 @@ public class Server extends javax.swing.JFrame {
 
     private Registry registry;
     private final Map<UUID, User> logedUsers;
+    private final Map<UUID, INotification> userConnections;
+    private String userXMLLocation;
+    private String tokensXMLLocation;
 
     /**
      * Creates new form Server
@@ -55,6 +58,7 @@ public class Server extends javax.swing.JFrame {
     public Server() {
         initComponents();
         logedUsers = new ConcurrentHashMap<>();
+        userConnections = new ConcurrentHashMap<>();
         btnConnection.addItemListener((ItemEvent ev) -> {
             if (ev.getStateChange() == ItemEvent.SELECTED) {
                 btnConnection.setText("Stop");
@@ -294,11 +298,16 @@ public class Server extends javax.swing.JFrame {
 
     public void startServer(int portNumber) throws RemoteException {
         try {
+            // Register services
             registry = LocateRegistry.createRegistry(portNumber);
             IAuthentication authentication = new AuthenticationService();
             registry.rebind(IAuthentication.LOOKUPNAME, authentication);
             this.txtServerLog
                     .append((String.format("%s Service running at %d port...\n", IAuthentication.LOOKUPNAME, portNumber)));
+            INotification notification = new NotificationService();
+            registry.rebind(INotification.LOOKUPNAME, notification);
+            this.txtServerLog
+                    .append((String.format("%s Service running at %d port...\n", INotification.LOOKUPNAME, portNumber)));
             ITokenizer tokenizer = new TokenizerService();
             registry.rebind(ITokenizer.LOOKUPNAME, tokenizer);
             this.txtServerLog
@@ -312,8 +321,7 @@ public class Server extends javax.swing.JFrame {
             this.txtServerLog
                     .append((String.format("%s Service running at %d port...", IRegister.LOOKUPNAME, portNumber)));
         } catch (RemoteException e) {
-            System.out.println(e.getMessage());
-            e.printStackTrace();
+            txtServerLog.append("\n" + e.getMessage());
             throw e;
         }
     }
@@ -322,10 +330,10 @@ public class Server extends javax.swing.JFrame {
         if (btnConnection.getModel().isSelected()) {
             try {
                 startServer(1099);
-                txtServerLog.append("\nServer started... \n" + LocalDateTime.now());
+                txtServerLog.append(String.format("\nServer started... \n%tB %<te,  %<tY  %<tT %<Tp%n", new Date()));
                 lblStatusOutput.setText("Online");
             } catch (RemoteException ex) {
-                txtServerLog.append("\n"+ex.getMessage());
+                txtServerLog.append("\n" + ex.getMessage());
                 Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
                 btnConnection.setSelected(false);
             }
@@ -333,7 +341,7 @@ public class Server extends javax.swing.JFrame {
             try {
                 UnicastRemoteObject.unexportObject(registry, true);
                 lblStatusOutput.setText("Offline");
-                txtServerLog.append("\nServer stopped... \n" + LocalDateTime.now() + "\n");
+                txtServerLog.append(String.format("\nServer stopped... \n%tB %<te,  %<tY  %<tT %<Tp%n", new Date()));
             } catch (NoSuchObjectException ex) {
                 Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
             }
@@ -342,7 +350,7 @@ public class Server extends javax.swing.JFrame {
 
     private void btnListTokensActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnListTokensActionPerformed
         XMLStream stream = new XMLStream();
-        Map<String, String> tokensFromXML = stream.<HashMap<String, String>>readXML("tokens.xml");
+        Map<String, String> tokensFromXML = stream.<HashMap<String, String>>readXML(this.tokensXMLLocation);
         List<Token> tokenObjects = new ArrayList<Token>();
         for (Map.Entry<String, String> entry : tokensFromXML.entrySet()) {
             tokenObjects.add(new Token(entry.getKey(), entry.getValue()));
@@ -359,30 +367,50 @@ public class Server extends javax.swing.JFrame {
     }//GEN-LAST:event_btnListTokensActionPerformed
 
     private void btnListCardsActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnListCardsActionPerformed
-        XMLStream stream = new XMLStream();
-        Map<String, String> tokensFromXML = stream.<HashMap<String, String>>readXML("tokens.xml");
-        List<Token> tokenObjects = new ArrayList<Token>();
-        for (Map.Entry<String, String> entry : tokensFromXML.entrySet()) {
-            tokenObjects.add(new Token(entry.getKey(), entry.getValue()));
-        }
-        List<Token> sortedTokens = tokenObjects
-                .stream()
-                .sorted((a, b) -> a.getCardId().compareTo(b.getCardId()))
-                .collect(Collectors.toList());
-        txtTokensOutput.setText("");
-        txtTokensOutput.append("Tokens\t         <->\t        Card Ids\n");
-        for (Token tokenObject : sortedTokens) {
-            txtTokensOutput.append(tokenObject.toString() + "\n");
+        JFileChooser fc = new JFileChooser(FileSystemView.getFileSystemView().getHomeDirectory());
+        fc.setAcceptAllFileFilterUsed(false);
+        FileNameExtensionFilter filter = new FileNameExtensionFilter("xml files (*.xml)", "xml");
+        fc.addChoosableFileFilter(filter);
+        fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        int i = fc.showOpenDialog(this);
+        if (i == JFileChooser.APPROVE_OPTION) {
+            File f = fc.getSelectedFile();
+            this.tokensXMLLocation = f.getPath();
+            XMLStream stream = new XMLStream();
+            Map<String, String> tokensFromXML = stream.<HashMap<String, String>>readXML(this.tokensXMLLocation);
+            List<Token> tokenObjects = new ArrayList<Token>();
+            for (Map.Entry<String, String> entry : tokensFromXML.entrySet()) {
+                tokenObjects.add(new Token(entry.getKey(), entry.getValue()));
+            }
+            List<Token> sortedTokens = tokenObjects
+                    .stream()
+                    .sorted((a, b) -> a.getCardId().compareTo(b.getCardId()))
+                    .collect(Collectors.toList());
+            txtTokensOutput.setText("");
+            txtTokensOutput.append("Tokens\t         <->\t        Card Ids\n");
+            for (Token tokenObject : sortedTokens) {
+                txtTokensOutput.append(tokenObject.toString() + "\n");
+            }
         }
     }//GEN-LAST:event_btnListCardsActionPerformed
 
     private void btnAllUsersActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnAllUsersActionPerformed
-        XMLStream stream = new XMLStream();
-        txtUsersOutput.setText("");
-        stream.<ArrayList<User>>readXML("users.xml")
-                .stream()
-                .sorted((a, b) -> a.getName().compareTo(b.getName())).collect(Collectors.toList())
-                .forEach(u -> txtUsersOutput.append(u.toString() + "\n\n"));
+        JFileChooser fc = new JFileChooser(FileSystemView.getFileSystemView().getHomeDirectory());
+        fc.setAcceptAllFileFilterUsed(false);
+        FileNameExtensionFilter filter = new FileNameExtensionFilter("xml files (*.xml)", "xml");
+        fc.addChoosableFileFilter(filter);
+        fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        int i = fc.showOpenDialog(this);
+        if (i == JFileChooser.APPROVE_OPTION) {
+            File f = fc.getSelectedFile();
+            this.userXMLLocation = f.getPath();
+            XMLStream stream = new XMLStream();
+            txtUsersOutput.setText("");
+            stream.<ArrayList<User>>readXML(this.userXMLLocation)
+                    .stream()
+                    .sorted((a, b) -> a.getName().compareTo(b.getName())).collect(Collectors.toList())
+                    .forEach(u -> txtUsersOutput.append(u.toString() + "\n\n"));
+        }
     }//GEN-LAST:event_btnAllUsersActionPerformed
 
     private void txtFindUserFocusGained(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_txtFindUserFocusGained
@@ -393,7 +421,7 @@ public class Server extends javax.swing.JFrame {
         String name = txtFindUser.getText();
         XMLStream stream = new XMLStream();
         txtUsersOutput.setText("");
-        stream.<ArrayList<User>>readXML("users.xml")
+        stream.<ArrayList<User>>readXML(this.userXMLLocation)
                 .stream()
                 .filter(u -> u.getName().toUpperCase().contains(name.toUpperCase()))
                 .sorted((a, b) -> a.getName().compareTo(b.getName()))
@@ -498,11 +526,11 @@ public class Server extends javax.swing.JFrame {
         }
 
         @Override
-        public UUID authenticate(String username, String password, IAlert alertUser) throws RemoteException {
+        public UUID authenticate(String username, String password, INotification alertUser) throws RemoteException {
             XMLStream stream = new XMLStream();
             User logedUser;
             UUID sentCookie = null;
-            List<User> usersFromXML = stream.<ArrayList<User>>readXML("users.xml");
+            List<User> usersFromXML = stream.<ArrayList<User>>readXML(userXMLLocation);
             logedUser = usersFromXML
                     .stream()
                     .filter(u -> (u.getName() == null ? username == null : u.getName().equals(username))
@@ -511,18 +539,30 @@ public class Server extends javax.swing.JFrame {
             if (logedUser != null) {
                 sentCookie = UUID.randomUUID();
                 logedUsers.put(sentCookie, logedUser);
-                alertUser.alert("Login Success");
+                userConnections.put(sentCookie, alertUser);
+                alertUser.notify("Login Success");
             } else {
-                alertUser.alert("Login Failed");
+                alertUser.notify("Login Failed");
             }
 
             return sentCookie;
         }
 
         @Override
-        public void logOut(UUID cookie, IAlert alertUser) throws RemoteException {
+        public void logOut(UUID cookie) throws RemoteException {
             logedUsers.remove(cookie);
-            alertUser.alert("Logged out");
+            userConnections.get(cookie).notify("Logged out");
+        }
+    }
+
+    class NotificationService extends UnicastRemoteObject implements INotification {
+
+        public NotificationService() throws RemoteException {
+        }
+
+        @Override
+        public void notify(String message) throws RemoteException {
+            txtServerLog.append(String.format("\n%s\n", message));
         }
     }
 
@@ -532,8 +572,9 @@ public class Server extends javax.swing.JFrame {
         }
 
         @Override
-        public String createToken(String cardId, UUID cookie, IAlert alertUser) throws RemoteException {
+        public String createToken(String cardId, UUID cookie) throws RemoteException {
             String result = "";
+            INotification user = userConnections.get(cookie);
             boolean canTokenize = true == logedUsers.get(cookie).getCanTokenize();
             if (canTokenize) {
                 Tokenizer tokenizer = new Tokenizer();
@@ -541,15 +582,15 @@ public class Server extends javax.swing.JFrame {
                 if (cardIdCheck) {
                     result = tokenizer.tokenize(cardId);
                     XMLStream stream = new XMLStream();
-                    Map<String, String> tokensFromXML = stream.<HashMap<String, String>>readXML("tokens.xml");
+                    Map<String, String> tokensFromXML = stream.<HashMap<String, String>>readXML(tokensXMLLocation);
                     tokensFromXML.put(result, cardId);
-                    stream.<Map<String, String>>writeXML(tokensFromXML, "tokens.xml", WriteMode.UPDATE);
-                    alertUser.alert("CardId tokenized.");
+                    stream.<Map<String, String>>writeXML(tokensFromXML, tokensXMLLocation, WriteMode.UPDATE);
+                    user.notify("CardId tokenized.");
                 } else {
-                    alertUser.alert("Wrong card id number!");
+                    user.notify("Wrong card id number!");
                 }
             } else {
-                alertUser.alert("Unauthorized to tokenize!");
+                user.notify("Unauthorized to tokenize!");
             }
             return result;
         }
@@ -561,20 +602,21 @@ public class Server extends javax.swing.JFrame {
         }
 
         @Override
-        public String getCardId(String token, UUID cookie, IAlert alertUser) throws RemoteException {
+        public String getCardId(String token, UUID cookie) throws RemoteException {
             String result = "";
+            INotification user = userConnections.get(cookie);
             boolean canRetrieve = true == logedUsers.get(cookie).getCanRetrieve();
             if (canRetrieve) {
                 XMLStream stream = new XMLStream();
-                result = stream.<HashMap<String, String>>readXML("tokens.xml")
+                result = stream.<HashMap<String, String>>readXML(tokensXMLLocation)
                         .get(token);
                 if (!result.isEmpty()) {
-                    alertUser.alert("Card Id retrieved.");
+                    user.notify("Card Id retrieved.");
                 } else {
-                    alertUser.alert("Card Id not tokenized!");
+                    user.notify("Card Id not tokenized!");
                 }
             } else {
-                alertUser.alert("Unauthorized to retrieve!");
+                user.notify("Unauthorized to retrieve!");
             }
             return result;
         }
@@ -586,13 +628,14 @@ public class Server extends javax.swing.JFrame {
         }
 
         @Override
-        public void register(String name, String password, boolean canTokenize, boolean canRetrieve, UUID cookie, IAlert alertUser) throws RemoteException {
+        public void register(String name, String password, boolean canTokenize, boolean canRetrieve, UUID cookie) throws RemoteException {
             XMLStream stream = new XMLStream();
-            List<User> usersFromXML = stream.<ArrayList<User>>readXML("users.xml");
+            INotification user = userConnections.get(cookie);
+            List<User> usersFromXML = stream.<ArrayList<User>>readXML(userXMLLocation);
             User newUser = new User(name, password, canTokenize, canRetrieve);
             usersFromXML.add(newUser);
-            stream.<List<User>>writeXML(usersFromXML, "users.xml", WriteMode.UPDATE);
-            alertUser.alert("User registered.");
+            stream.<List<User>>writeXML(usersFromXML, userXMLLocation, WriteMode.UPDATE);
+            user.notify("User registered.");
         }
     }
 }

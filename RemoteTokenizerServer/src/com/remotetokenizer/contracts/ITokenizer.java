@@ -17,5 +17,5 @@ public interface ITokenizer extends Remote {
 
     public static final String LOOKUPNAME = "Tokenizer";
 
-    public String createToken(String bankId, UUID cookie, IAlert alertUser) throws RemoteException;
+    public String createToken(String bankId, UUID cookie) throws RemoteException;
 }
